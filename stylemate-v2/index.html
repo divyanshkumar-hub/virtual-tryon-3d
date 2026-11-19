@@ -355,9 +355,8 @@
 
   <script>
     let scene, camera, renderer, controls;
-    let avatarModel = null, topMesh = null, bottomMesh = null, headMesh = null;
+    let avatarModel = null, topMesh = null, bottomMesh = null, shoeMesh = null, headMesh = null;
     let glassesGroup = null;
-    let isProcedural = false;
     let selectedFile = null;
     let currentMeasurements = null;
     let currentGarment = { name: "Navy Tailored Double-Breasted Blazer", color: "#1e3a8a" };
@@ -447,61 +446,22 @@
       scene.add(glassesGroup);
     }
 
-    function buildProceduralMannequin() {
-      isProcedural = true;
-      avatarModel = new THREE.Group();
-
-      const skinMat = new THREE.MeshStandardMaterial({ color: 0xe8be9e, roughness: 0.5 });
-      const topMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.4 });
-      const bottomMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.5 });
-
-      // Head
-      headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.12, 32, 32), skinMat);
-      headMesh.position.y = 1.70;
-      headMesh.scale.set(0.9, 1.1, 1.0);
-      avatarModel.add(headMesh);
-
-      // Torso / Top
-      topMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.16, 0.55, 32), topMat);
-      topMesh.position.y = 1.25;
-      avatarModel.add(topMesh);
-
-      // Legs / Bottom
-      bottomMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.12, 0.90, 32), bottomMat);
-      bottomMesh.position.y = 0.52;
-      avatarModel.add(bottomMesh);
-
-      scene.add(avatarModel);
-      document.getElementById('studio-status').textContent = '✓ Procedural 3D Mannequin Active';
-    }
-
     function loadModel() {
       const loader = new THREE.GLTFLoader();
       const modelUrl = '/web_app/models/realistic_human.glb';
-      let loaded = false;
-
-      // Timeout fallback if GLB takes > 6s
-      const fallbackTimer = setTimeout(() => {
-        if (!loaded) {
-          console.warn('GLB load timeout -> activating procedural mannequin fallback');
-          buildProceduralMannequin();
-        }
-      }, 5000);
 
       loader.load(
         modelUrl,
         (gltf) => {
-          loaded = true;
-          clearTimeout(fallbackTimer);
-          if (isProcedural && avatarModel) {
-            scene.remove(avatarModel);
-          }
           avatarModel = gltf.scene;
           avatarModel.traverse((child) => {
             if (child.isMesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
               if (child.material) child.material = child.material.clone();
               if (child.name === 'Wolf3D_Outfit_Top') topMesh = child;
               else if (child.name === 'Wolf3D_Outfit_Bottom') bottomMesh = child;
+              else if (child.name === 'Wolf3D_Outfit_Footwear') shoeMesh = child;
               else if (child.name === 'Wolf3D_Head' || child.name === 'Wolf3D_Body') headMesh = child;
             }
           });
@@ -516,8 +476,8 @@
           }
         },
         (err) => {
-          console.warn('GLB error -> fallback to procedural', err);
-          if (!loaded) buildProceduralMannequin();
+          console.error('[3D Studio] Error loading realistic_human.glb:', err);
+          document.getElementById('studio-status').textContent = '⚠️ Error loading 3D human model';
         }
       );
     }
