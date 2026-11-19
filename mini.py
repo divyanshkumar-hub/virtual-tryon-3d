@@ -107,7 +107,18 @@ def run_ai_fashion_analysis(image_bytes):
     face_shape = cv.get("face_shape", "Oval")
     undertone = cv.get("undertone", "Neutral")
 
-    if "Inverted Triangle" in body_type or "Rectangle" in body_type:
+    # Use real MediaPipe landmarks if detected, otherwise fall back to proportions
+    real_measurements = cv.get("body_measurements")
+    if real_measurements and "shoulder_cm" in real_measurements:
+        measurements = {
+            **real_measurements,
+            "aspect_ratio": ratio,
+            "shoulder_hip_ratio": cv.get("shoulder_hip_ratio"),
+        }
+        clothes = cv.get("recommended_clothes", [])
+        shoes = cv.get("recommended_shoes", [])
+        sunglasses = cv.get("recommended_sunglasses", [])
+    elif "Inverted Triangle" in body_type or "Rectangle" in body_type:
         measurements = {
             "body_type": body_type,
             "shoulder_cm": 46.5,
