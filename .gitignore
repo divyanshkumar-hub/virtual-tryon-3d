@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.spec
+.Python
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env
+
+# Database & user data
+instance/
+uploads/
+*.db
+*.sqlite
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+*.out
+
+# Large model files (use Git LFS or document separately)
+# web_app/models/*.glb
+
+# Temporary
+*.tmp
+*.bak
