@@ -8,12 +8,13 @@
 
 | Feature | Description |
 |---|---|
-| 📸 **Photo Upload & AI Analysis** | Upload a photo → get body type, skin tone, style recommendations |
+| 📸 **Real AI Body Measurements** | MediaPipe PoseLandmarker (33 anatomical keypoints) + OpenCV extracts real shoulder, chest, waist, hip, torso, arm & leg dimensions in cm |
+| 📏 **Personalized Sizing** | Dynamically recommends exact clothing sizes (XS–XXL) based on computed chest and shoulder width |
 | 👕 **Clothing Catalog** | Browse garments by category (tops, bottoms, dresses, outerwear, accessories) |
-| 🧍 **3D Avatar Try-On** | Real-time Three.js mannequin with orbit controls — click any garment to dress it |
-| 💾 **Save Outfits** | Save & retrieve outfit combinations tied to your user account |
+| 🧍 **Dynamic 3D Avatar Try-On** | Three.js mannequin auto-scales to match user's actual body measurements + real-time 360° orbit controls |
+| 💾 **Save Outfits** | Save & retrieve outfit combinations tied to your user account in SQLite DB |
 | 🎨 **Quick Style Chips** | One-click outfit presets for Casual, Formal, Party, etc. |
-| 🤖 **AI Recommendations** | Intelligent matching based on body shape + color analysis |
+| 🤖 **AI Recommendations** | Intelligent matching based on body shape (Inverted Triangle, Hourglass, Pear, Rectangle) + color analysis |
 
 ---
 

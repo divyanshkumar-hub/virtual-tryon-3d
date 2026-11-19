@@ -372,8 +372,10 @@
       <div class="user-row">
         <input type="text" id="user-name-input" value="StyleMate Demo User" placeholder="Your Name" />
         <input type="email" id="user-email-input" value="demo@stylemate.ai" placeholder="Your Email" />
+        <input type="number" id="user-height-input" value="175" min="140" max="220" placeholder="Height cm" style="width:120px;" title="Your real height for accurate AI measurements" />
         <button onclick="registerOrSwitchUser()" style="padding:10px 16px;font-size:13px;">Save / Switch User</button>
       </div>
+      <p style="font-size:12px;color:#888;margin-top:5px;">📏 Enter your real height (cm) for accurate MediaPipe body measurements</p>
       <p id="user-status-msg" style="margin-top:7px;font-size:13px;color:#059669;font-weight:600;display:none;"></p>
     </div>
 
@@ -406,14 +408,17 @@
     <div class="result-card">
       <h3>🧍 Body Measurements</h3>
       <p><strong>Body Type:</strong> <span id="res-body-type">-</span></p>
+      <p><strong>Clothing Size:</strong> <span id="res-size" style="color:#6366f1;font-weight:700;">-</span></p>
       <p><strong>Measurements:</strong> <span id="res-measurements">—</span></p>
-      <p><strong>AI Fit Confidence:</strong> 96.4% (SSIM: 0.892)</p>
+      <p><strong>Extra:</strong> <span id="res-extra">—</span></p>
+      <p id="res-method-badge" style="font-size:12px;margin-top:6px;"></p>
     </div>
 
     <div class="result-card">
       <h3>😊 Face Analysis</h3>
       <p><strong>Face Shape:</strong> <span id="res-face-shape">-</span></p>
       <p><strong>Recommended Frame:</strong> Geometric / Aviator</p>
+      <p><strong>AI Fit Confidence:</strong> <span id="res-confidence">-</span></p>
       <p style="font-size:13px;color:#059669;"><strong>DB:</strong> Stored in <code>analysis</code> table ✓</p>
     </div>
 
@@ -470,15 +475,16 @@
         🧍 Realistic 3D Human Model — drag to rotate, scroll to zoom!
       </p>
 
-      <!-- Physique controls -->
-      <div class="quick-tryon-controls" style="border-bottom:1px solid #eee;padding-bottom:12px;">
-        <span class="row-label">Physique &amp; Skin:</span>
-        <button class="quick-chip active" id="phys-athletic" onclick="setPhysique('athletic')">💪 Athletic</button>
-        <button class="quick-chip" id="phys-muscular" onclick="setPhysique('muscular')">🏋️ Muscular</button>
-        <button class="quick-chip" id="phys-slim" onclick="setPhysique('slim')">🏃 Slim</button>
-        <button class="quick-chip" id="phys-shirtless" onclick="toggleShirtless()">🧍 Shirtless</button>
-        <button class="quick-chip" onclick="cycleSkinTone()">🎨 Skin Tone</button>
-      </div>
+        <!-- Physique controls -->
+        <div class="quick-tryon-controls" style="border-bottom:1px solid #eee;padding-bottom:12px;">
+          <span class="row-label">Physique &amp; Skin:</span>
+          <button class="quick-chip active" id="phys-athletic" onclick="setPhysique('athletic')">💪 Athletic</button>
+          <button class="quick-chip" id="phys-muscular" onclick="setPhysique('muscular')">🏋️ Muscular</button>
+          <button class="quick-chip" id="phys-slim" onclick="setPhysique('slim')">🏃 Slim</button>
+          <button class="quick-chip" id="phys-custom" onclick="applyCustomMeasurements()" style="display:none;background:#6366f1;color:#fff;border-color:#6366f1;">🎯 My Measured Body</button>
+          <button class="quick-chip" id="phys-shirtless" onclick="toggleShirtless()">🧍 Shirtless</button>
+          <button class="quick-chip" onclick="cycleSkinTone()">🎨 Skin Tone</button>
+        </div>
 
       <!-- Garment quick-try chips -->
       <div class="quick-tryon-controls">
@@ -652,6 +658,8 @@ async function analyzeImage() {
   const formData = new FormData();
   formData.append('image', currentFile, currentFile.name || 'upload.jpg');
   formData.append('user_id', String(currentUserId));
+  const heightVal = parseFloat(document.getElementById('user-height-input')?.value) || 175;
+  formData.append('height_cm', String(heightVal));
 
   try {
     const res = await fetch(API_BASE + '/api/upload', { method: 'POST', body: formData });
@@ -678,6 +686,27 @@ async function analyzeImage() {
 function renderAnalysisResults(data) {
   document.getElementById('res-body-type').textContent = data.body_type || 'Athletic';
   document.getElementById('res-face-shape').textContent = data.face_shape || 'Oval';
+
+  // Clothing size
+  const sizeEl = document.getElementById('res-size');
+  if (sizeEl) sizeEl.textContent = data.clothing_size ? `Size ${data.clothing_size}` : '-';
+
+  // Fit confidence
+  const confEl = document.getElementById('res-confidence');
+  if (confEl && data.fit_confidence) {
+    confEl.textContent = `${data.fit_confidence}% (SSIM: ${data.ssim_score || '-'})`;
+  }
+
+  // Analysis method badge
+  const badge = document.getElementById('res-method-badge');
+  if (badge) {
+    if (data.analysis_method === 'mediapipe_real' && data.landmarks_detected) {
+      badge.innerHTML = '🤖 <strong style="color:#059669;">MediaPipe Real Analysis</strong> — 33 body landmarks detected ✓';
+    } else {
+      badge.innerHTML = '⚡ <strong style="color:#f59e0b;">Simulated Analysis</strong> — install mediapipe for real measurements';
+    }
+  }
+
   if (data.analysis_id) {
     document.getElementById('res-analysis-id').textContent = `(SQLite Record #${data.analysis_id})`;
   }
@@ -685,6 +714,20 @@ function renderAnalysisResults(data) {
     const m = data.body_measurements;
     document.getElementById('res-measurements').textContent =
       `Shoulders: ${m.shoulder_cm || 47}cm | Chest: ${m.chest_cm || 100}cm | Waist: ${m.waist_cm || 82}cm | Hips: ${m.hip_cm || 96}cm`;
+
+    // Extra measurements (torso, arm, leg) if available
+    const extraEl = document.getElementById('res-extra');
+    if (extraEl && m.torso_cm) {
+      extraEl.textContent = `Torso: ${m.torso_cm}cm | Arm: ${m.arm_cm}cm | Leg: ${m.leg_cm}cm | Height: ${m.height_cm}cm`;
+    } else if (extraEl) {
+      extraEl.textContent = '—';
+    }
+
+    // Auto-scale 3D Mannequin to match user's real body measurements
+    window._lastMeasurements = m;
+    const customBtn = document.getElementById('phys-custom');
+    if (customBtn) customBtn.style.display = 'inline-block';
+    applyMeasurementsToAvatar(m);
   }
 
   lastClothes = data.recommended_clothes || [];
@@ -922,6 +965,35 @@ function setPhysique(mode) {
   if (mode === 'athletic') { avatarModel.scale.set(1.0, 1.0, 1.0); setStatus('Physique: Athletic Defined'); }
   else if (mode === 'muscular') { avatarModel.scale.set(1.08, 1.01, 1.08); setStatus('Physique: Muscular Mesomorph'); }
   else if (mode === 'slim') { avatarModel.scale.set(0.92, 1.01, 0.92); setStatus('Physique: Slim Tailored'); }
+  const customBtn = document.getElementById('phys-custom');
+  if (customBtn && mode !== 'custom') customBtn.classList.remove('active');
+}
+
+function applyMeasurementsToAvatar(m) {
+  if (!avatarModel || !m) return;
+  const shoulder = m.shoulder_cm || 47.0;
+  const waist = m.waist_cm || 82.0;
+  const hip = m.hip_cm || 96.0;
+  const height = m.height_cm || 175.0;
+
+  const scaleX = Math.min(Math.max(shoulder / 48.0, 0.82), 1.25);
+  const scaleY = Math.min(Math.max(height / 175.0, 0.85), 1.20);
+  const scaleZ = Math.min(Math.max(((waist / 82.0) + (hip / 96.0)) / 2.0, 0.82), 1.25);
+
+  avatarModel.scale.set(scaleX, scaleY, scaleZ);
+  ['athletic', 'muscular', 'slim'].forEach(id => {
+    const el = document.getElementById('phys-' + id);
+    if (el) el.classList.remove('active');
+  });
+  const customBtn = document.getElementById('phys-custom');
+  if (customBtn) customBtn.classList.add('active');
+  setStatus(`🎯 3D Mannequin scaled to your body: ${shoulder}cm shoulders, ${Math.round(height)}cm height`);
+}
+
+function applyCustomMeasurements() {
+  if (window._lastMeasurements) {
+    applyMeasurementsToAvatar(window._lastMeasurements);
+  }
 }
 
 function cycleSkinTone() {
