@@ -62,6 +62,11 @@ def index():
     return jsonify({"message": "StyleMate v2 API is running", "status": "online"})
 
 
+@app.route("/favicon.ico", methods=["GET"])
+def favicon():
+    return "", 204
+
+
 @app.route("/api/status", methods=["GET"])
 def api_status():
     return jsonify({
