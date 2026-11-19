@@ -197,16 +197,22 @@ def run_ai_fashion_analysis(image_bytes):
             "Hexagonal Metal Frames",
         ]
 
+    pose_det = cv.get("pose_detected", cv.get("landmarks_detected", False))
+    face_det = cv.get("face_detected", cv.get("landmarks_detected", False))
+    engine = cv.get("analysis_engine", cv.get("analysis_method", "mediapipe_real" if pose_det else "pillow_fallback"))
+    clothing_size = cv.get("clothing_size", measurements.get("clothing_size", "M"))
+
     return {
         "success": True,
         "body_type": body_type,
         "face_shape": face_shape,
         "skin_tone": cv.get("skin_tone", "Medium"),
         "undertone": undertone,
+        "clothing_size": clothing_size,
         "recommended_colors": cv.get("recommended_colors", []),
-        "pose_detected": cv.get("pose_detected", False),
-        "face_detected": cv.get("face_detected", False),
-        "analysis_engine": cv.get("analysis_engine", "pillow_fallback"),
+        "pose_detected": pose_det,
+        "face_detected": face_det,
+        "analysis_engine": engine,
         "body_measurements": measurements,
         "recommended_clothes": clothes,
         "recommended_shoes": shoes,
@@ -377,6 +383,9 @@ def upload_image():
     save_path = os.path.join(UPLOAD_FOLDER, unique_name)
 
     image_bytes = image.read()
+    if not image_bytes or len(image_bytes) == 0:
+        return jsonify({"error": "Uploaded image is empty"}), 400
+
     with open(save_path, "wb") as f:
         f.write(image_bytes)
 
@@ -425,21 +434,29 @@ def analyze_and_store():
     else:
         image_bytes = request.get_data()
 
+    if not image_bytes or len(image_bytes) == 0:
+        return jsonify({"error": "Please attach an image"}), 400
+
     # Save to uploads/ and samples/
     unique_name = str(uuid4()) + "_" + (filename or "person.jpg")
     save_path = os.path.join(UPLOAD_FOLDER, unique_name)
-    if image_bytes:
-        with open(save_path, "wb") as f:
-            f.write(image_bytes)
-        sample_copy = os.path.join(SAMPLES_DIR, "partner_uploaded_person.jpg")
-        with open(sample_copy, "wb") as f:
-            f.write(image_bytes)
+    with open(save_path, "wb") as f:
+        f.write(image_bytes)
+    sample_copy = os.path.join(SAMPLES_DIR, "partner_uploaded_person.jpg")
+    with open(sample_copy, "wb") as f:
+        f.write(image_bytes)
 
     ai_result = run_ai_fashion_analysis(image_bytes)
 
     # Persist into SQLite Analysis table
-    if not db.session.get(User, user_id):
-        user_id = 1
+    user = db.session.get(User, user_id)
+    if not user:
+        user = User.query.first()
+        if not user:
+            user = User(name="StyleMate Demo User", email="demo@stylemate.ai")
+            db.session.add(user)
+            db.session.commit()
+        user_id = user.id
 
     analysis = Analysis(
         user_id=user_id,
@@ -645,15 +662,25 @@ def try_on():
     data = request.get_json(silent=True) or {}
 
     clothing_id = data.get("clothing_id")
+    clothing_name = data.get("clothing_name")
     accessory_id = data.get("accessory_id")
 
-    if clothing_id is None:
-        return jsonify({"error": "clothing_id is required"}), 400
+    if clothing_id is None and clothing_name:
+        matched = Clothing.query.filter(Clothing.name.ilike(f"%{clothing_name}%")).first()
+        if matched:
+            clothing_id = matched.id
+        else:
+            first_c = Clothing.query.first()
+            clothing_id = first_c.id if first_c else 1
+    elif clothing_id is None:
+        first_c = Clothing.query.first()
+        clothing_id = first_c.id if first_c else 1
 
     item = db.session.get(Clothing, int(clothing_id))
-
     if item is None:
-        return jsonify({"error": "Clothing item not found"}), 404
+        item = Clothing.query.first()
+        if item is None:
+            return jsonify({"error": "Clothing item not found"}), 404
 
     return jsonify({
         "message": "Items ready for 3D visualization",

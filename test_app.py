@@ -66,9 +66,66 @@ def test_api_upload_and_try_on(client):
         content_type="multipart/form-data",
     )
     assert upload_res.status_code in (200, 201)
+    data = upload_res.get_json()
+    assert "body_measurements" in data
+    assert "body_type" in data
+    assert "face_shape" in data
+    assert "recommended_clothes" in data
+    assert "recommended_shoes" in data
+    assert "recommended_sunglasses" in data
 
     clothing = client.get("/api/clothing").get_json()
     if clothing:
         tryon_res = client.post("/api/try-on", json={"clothing_id": clothing[0]["id"]})
         assert tryon_res.status_code == 200
         assert "clothing_name" in tryon_res.get_json()
+
+
+def test_api_analyze_success(client):
+    png_bytes = _make_sample_png_bytes()
+    res = client.post(
+        "/api/analyze",
+        data={"image": (io.BytesIO(png_bytes), "person.png")},
+        content_type="multipart/form-data",
+    )
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["success"] is True
+    assert "body_measurements" in data
+    assert "shoulder_cm" in data["body_measurements"]
+    assert "chest_cm" in data["body_measurements"]
+    assert "waist_cm" in data["body_measurements"]
+    assert "hip_cm" in data["body_measurements"]
+    assert "body_type" in data
+    assert "face_shape" in data
+    assert isinstance(data["recommended_clothes"], list)
+    assert len(data["recommended_clothes"]) > 0
+    assert isinstance(data["recommended_shoes"], list)
+    assert len(data["recommended_shoes"]) > 0
+    assert isinstance(data["recommended_sunglasses"], list)
+    assert len(data["recommended_sunglasses"]) > 0
+    assert "clothing_size" in data
+
+
+def test_api_analyze_rejects_empty(client):
+    res = client.post("/api/analyze", data={})
+    assert res.status_code == 400
+    assert "error" in res.get_json()
+
+
+def test_api_upload_rejects_empty_file(client):
+    res = client.post(
+        "/api/upload",
+        data={"user_id": "1", "image": (io.BytesIO(b""), "empty.png")},
+        content_type="multipart/form-data",
+    )
+    assert res.status_code == 400
+    assert "error" in res.get_json()
+
+
+def test_api_try_on_with_clothing_name(client):
+    res = client.post("/api/try-on", json={"clothing_name": "Blazer"})
+    assert res.status_code == 200
+    data = res.get_json()
+    assert "clothing_id" in data
+    assert "clothing_name" in data
