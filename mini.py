@@ -15,6 +15,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INSTANCE_DIR = os.path.join(BASE_DIR, "instance")
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
 SAMPLES_DIR = os.path.join(BASE_DIR, "samples")
+WEB_APP_DIR = os.path.join(BASE_DIR, "web_app")
 COMBINED_HTML = os.path.join(BASE_DIR, "combined_app.html")
 
 os.makedirs(INSTANCE_DIR, exist_ok=True)
@@ -653,6 +654,25 @@ def serve_uploads(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
 
+# Serve web_app/ static files (3D studio, GLB model, JS loaders)
+@app.route("/web_app/<path:filename>", methods=["GET"])
+def serve_web_app(filename):
+    return send_from_directory(WEB_APP_DIR, filename)
+
+
+# Alias: /models/ → web_app/models/ (backward-compatible)
+@app.route("/models/<path:filename>", methods=["GET"])
+def serve_models(filename):
+    models_dir = os.path.join(WEB_APP_DIR, "models")
+    return send_from_directory(models_dir, filename)
+
+
+# Serve web_app/index.html at /studio
+@app.route("/studio", methods=["GET"])
+def studio():
+    return send_file(os.path.join(WEB_APP_DIR, "index.html"))
+
+
 # Create database tables and seed initial catalog
 with app.app_context():
     db.create_all()
@@ -666,6 +686,13 @@ if __name__ == "__main__":
     print(f" [OK] SQLite Database: {DB_PATH}")
     print(f" [OK] Uploads Folder:  {UPLOAD_FOLDER}")
     print(" [OK] Server URL:      http://127.0.0.1:5000")
+    print(" [OK] 3D Studio:       http://127.0.0.1:5000/studio")
     print("=" * 68)
-    app.run(debug=True, port=5000)
+
+    def open_browser():
+        time.sleep(1.5)
+        webbrowser.open("http://127.0.0.1:5000")
+
+    threading.Thread(target=open_browser, daemon=True).start()
+    app.run(debug=False, port=5000)
 
