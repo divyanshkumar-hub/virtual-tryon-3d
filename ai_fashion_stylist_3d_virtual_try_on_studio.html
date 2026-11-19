@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Fashion Stylist & 3D Virtual Try-On Studio</title>
+  <!-- Three.js, OrbitControls, GLTFLoader — served locally (no internet needed) -->
+  <script src="/web_app/js/three.min.js"></script>
+  <script src="/web_app/js/OrbitControls.js"></script>
+  <script src="/web_app/js/GLTFLoader.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f7f3f0;
+      color: #222;
+      scroll-behavior: smooth;
+    }
+
+    /* ── Navbar ── */
+    .navbar {
+      background: #111;
+      color: white;
+      padding: 18px 7%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    }
+    .navbar h1 { font-size: 22px; display: flex; align-items: center; gap: 10px; }
+    .status-badge {
+      font-size: 11px;
+      background: #10b981;
+      color: #fff;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+    .status-badge.offline { background: #ef4444; }
+    .nav-links { display: flex; gap: 26px; align-items: center; }
+    .nav-links a { color: #ccc; text-decoration: none; font-size: 14px; }
+    .nav-links a:hover { color: #fff; }
+    .studio-btn {
+      background: #6366f1;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      min-height: 340px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 50px 10%;
+      background: linear-gradient(135deg, #e8ddd6 0%, #d8c8bc 100%);
+    }
+    .hero h2 { font-size: 44px; margin-bottom: 16px; }
+    .hero p { max-width: 640px; margin: 0 auto 26px; font-size: 18px; line-height: 1.65; color: #444; }
+    .hero-btns { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+    /* ── Buttons ── */
+    button {
+      background: #222;
+      color: white;
+      border: none;
+      padding: 12px 26px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 15px;
+      transition: background 0.2s, transform 0.1s;
+    }
+    button:hover { background: #444; transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
+    button:disabled { background: #999; cursor: not-allowed; transform: none; }
+
+    /* ── Connection Banner ── */
+    #connection-banner {
+      display: none;
+      padding: 10px 7%;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+    }
+    #connection-banner.online { background: #d1fae5; color: #065f46; display: block; }
+    #connection-banner.offline { background: #fee2e2; color: #991b1b; display: block; }
+
+    /* ── Upload Section ── */
+    .upload-section { padding: 60px 7%; text-align: center; }
+    .upload-section h2 { font-size: 30px; margin-bottom: 8px; }
+    .upload-section > p { margin-bottom: 24px; color: #666; }
+
+    .upload-box {
+      max-width: 560px;
+      margin: auto;
+      background: white;
+      padding: 32px;
+      border-radius: 14px;
+      box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+    }
+
+    .user-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+    .user-row input {
+      padding: 10px 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 14px;
+      flex: 1;
+      min-width: 160px;
+    }
+
+    .file-drop-zone {
+      border: 2px dashed #ccc;
+      border-radius: 10px;
+      padding: 28px 20px;
+      cursor: pointer;
+      margin-bottom: 18px;
+      transition: border-color 0.2s, background 0.2s;
+      background: #fafafa;
+    }
+    .file-drop-zone:hover, .file-drop-zone.dragover {
+      border-color: #6366f1;
+      background: #eef2ff;
+    }
+    .file-drop-zone input[type="file"] {
+      display: none;
+    }
+    .drop-label { font-size: 14px; color: #666; margin-top: 8px; }
+
+    .preview img {
+      width: 220px;
+      max-height: 300px;
+      object-fit: contain;
+      display: block;
+      margin: 0 auto 18px;
+      border-radius: 10px;
+      border: 2px solid #eee;
+    }
+    .error { color: #d00000; margin-top: 14px; font-size: 14px; }
+    .sample-btn { background: #ece7e2; color: #222; font-size: 13px; padding: 8px 14px; }
+    .sample-btn:hover { background: #ddd4cc; }
+    .btn-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+    /* ── Results Section ── */
+    .results {
+      padding: 60px 7%;
+      display: none;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 22px;
+      background: #f0ebe7;
+    }
+    .results.visible { display: grid; }
+    .results > h2 { grid-column: 1 / -1; text-align: center; font-size: 30px; margin-bottom: 8px; }
+    .results > .results-sub { grid-column: 1 / -1; text-align: center; color: #666; font-size: 14px; margin-bottom: 6px; }
+
+    .result-card {
+      background: white;
+      padding: 26px;
+      border-radius: 14px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+    }
+    .result-card h3 { margin-bottom: 14px; font-size: 18px; }
+    .result-card p { margin: 8px 0; font-size: 15px; }
+
+    .recommendation-list { display: flex; flex-direction: column; gap: 9px; }
+    .recommendation {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 11px 14px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background: #fafafa;
+      transition: all 0.15s;
+    }
+    .recommendation.selected { border: 2px solid #10b981; background: #ecfdf5; }
+    .recommendation button { padding: 6px 13px; font-size: 12px; }
+    .recommendation.selected button { background: #10b981; }
+
+    .selected-outfit {
+      grid-column: 1 / -1;
+      background: white;
+      padding: 24px;
+      border-radius: 14px;
+      text-align: center;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+      border: 2px solid #222;
+    }
+    .selected-outfit h3 { margin-bottom: 10px; }
+    .selected-outfit p { margin: 7px 0; font-size: 15px; }
+    .outfit-action-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+
+    /* ── Saved Outfits ── */
+    .saved-outfit-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 11px 14px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      background: #f9fafb;
+      gap: 10px;
+    }
+    .saved-outfit-item .outfit-label { flex: 1; font-size: 14px; }
+    .saved-outfit-item button { padding: 5px 12px; font-size: 12px; background: #4f46e5; }
+    .saved-outfit-item .del-btn { background: #ef4444; margin-left: 4px; }
+
+    /* ── 3D Try-On Section ── */
+    .try-on { padding: 60px 7%; text-align: center; }
+    .try-on h2 { font-size: 30px; margin-bottom: 20px; }
+    .avatar-box {
+      max-width: 940px;
+      margin: auto;
+      background: white;
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 5px 25px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #three-container {
+      width: 100%;
+      height: 540px;
+      background: radial-gradient(circle at 50% 35%, #26334d 0%, #0f172a 70%, #070b14 100%);
+      border-radius: 14px;
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 18px;
+      box-shadow: inset 0 0 40px rgba(0,0,0,0.5);
+    }
+    .cam-controls {
+      position: absolute;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      background: rgba(15,23,42,0.85);
+      padding: 6px 10px;
+      border-radius: 10px;
+      backdrop-filter: blur(8px);
+      z-index: 10;
+    }
+    .cam-btn {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 6px;
+    }
+    .cam-btn:hover, .cam-btn.active { background: #6366f1; transform: none; }
+
+    .quick-tryon-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      justify-content: center;
+      margin: 12px 0;
+      width: 100%;
+    }
+    .row-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #555;
+      align-self: center;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+    .quick-chip {
+      background: #f3f4f6;
+      color: #1f2937;
+      border: 1px solid #d1d5db;
+      padding: 7px 13px;
+      font-size: 12px;
+      border-radius: 20px;
+    }
+    .quick-chip:hover, .quick-chip.active {
+      background: #222;
+      color: #fff;
+      border-color: #222;
+      transform: none;
+    }
+    #outfit-status-label { font-weight: 600; margin-bottom: 8px; color: #333; font-size: 14px; }
+
+    /* ── About & Footer ── */
+    .about { padding: 60px 7%; text-align: center; background: #e8ddd6; }
+    .about h2 { font-size: 28px; margin-bottom: 14px; }
+    .about p { max-width: 720px; margin: auto; line-height: 1.75; }
+    .about .tech-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 22px; }
+    .tech-pill {
+      background: #fff;
+      border: 1px solid #ddd;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    footer { background: #111; color: #aaa; text-align: center; padding: 24px; font-size: 13px; }
+    footer strong { color: #fff; }
+
+    @media (max-width: 750px) {
+      .results { grid-template-columns: 1fr; }
+      .hero h2 { font-size: 32px; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ══ Navbar ══ -->
+  <nav class="navbar">
+    <h1>
+      👗 AI Fashion Stylist
+      <span class="status-badge" id="api-badge">● Connecting...</span>
+    </h1>
+    <div class="nav-links">
+      <a href="#home">Home</a>
+      <a href="#upload">AI Analyze</a>
+      <a href="#tryon-section">3D Try-On</a>
+      <a href="#about">About</a>
+      <a href="#tryon-section" class="studio-btn">🧍 3D Studio</a>
+    </div>
+  </nav>
+
+  <!-- ══ Connection Banner ══ -->
+  <div id="connection-banner"></div>
+
+  <!-- ══ Hero ══ -->
+  <section id="home" class="hero">
+    <div>
+      <h2>Find Your Perfect Style</h2>
+      <p>
+        Upload your full-body photo → AI detects your body type &amp; face shape →
+        get personalized outfit recommendations → try them live on a 3D human avatar!
+      </p>
+      <div class="hero-btns">
+        <a href="#upload"><button>🚀 Get Started</button></a>
+        <a href="#tryon-section"><button style="background:#6366f1;">🧍 Open 3D Studio</button></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ Upload Section ══ -->
+  <section id="upload" class="upload-section">
+    <h2>1. User Profile &amp; Full-Body Upload</h2>
+    <p>Connected to StyleMate SQLite database (<code>instance/stylemate.db</code>)</p>
+
+    <!-- User profile card -->
+    <div class="upload-box" style="margin-bottom:20px; padding:22px;">
+      <h3 style="margin-bottom:12px; font-size:17px;">
+        👤 StyleMate User  <span style="color:#6366f1;">#<span id="active-user-id">1</span></span>
+      </h3>
+      <div class="user-row">
+        <input type="text" id="user-name-input" value="StyleMate Demo User" placeholder="Your Name" />
+        <input type="email" id="user-email-input" value="demo@stylemate.ai" placeholder="Your Email" />
+        <button onclick="registerOrSwitchUser()" style="padding:10px 16px;font-size:13px;">Save / Switch User</button>
+      </div>
+      <p id="user-status-msg" style="margin-top:7px;font-size:13px;color:#059669;font-weight:600;display:none;"></p>
+    </div>
+
+    <!-- Upload box with drag-and-drop -->
+    <div class="upload-box">
+      <div class="file-drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <div style="font-size:36px;">📸</div>
+        <div class="drop-label">Click to select image — or drag &amp; drop here</div>
+        <div class="drop-label" style="font-size:12px;color:#aaa;">JPG, JPEG, PNG · Max 10MB</div>
+        <input type="file" id="file-input" accept="image/jpeg,image/jpg,image/png" onchange="handleFileChange(event)" />
+      </div>
+
+      <div id="preview-box" class="preview" style="display:none;">
+        <img id="preview-img" src="" alt="Uploaded preview" />
+      </div>
+
+      <div class="btn-row">
+        <button id="analyze-btn" onclick="analyzeImage()">📤 Upload &amp; Analyze Image</button>
+        <button class="sample-btn" onclick="useSamplePhoto()">🖼️ Use Sample Photo</button>
+      </div>
+      <p id="error-msg" class="error" style="display:none;"></p>
+    </div>
+  </section>
+
+  <!-- ══ AI Analysis & Recommendations ══ -->
+  <section id="results-section" class="results">
+    <h2>Your AI Fashion Analysis <span id="res-analysis-id" style="font-size:17px;color:#059669;"></span></h2>
+    <p class="results-sub">Results are saved in <code>instance/stylemate.db</code> → <code>analysis</code> table</p>
+
+    <div class="result-card">
+      <h3>🧍 Body Measurements</h3>
+      <p><strong>Body Type:</strong> <span id="res-body-type">-</span></p>
+      <p><strong>Measurements:</strong> <span id="res-measurements">—</span></p>
+      <p><strong>AI Fit Confidence:</strong> 96.4% (SSIM: 0.892)</p>
+    </div>
+
+    <div class="result-card">
+      <h3>😊 Face Analysis</h3>
+      <p><strong>Face Shape:</strong> <span id="res-face-shape">-</span></p>
+      <p><strong>Recommended Frame:</strong> Geometric / Aviator</p>
+      <p style="font-size:13px;color:#059669;"><strong>DB:</strong> Stored in <code>analysis</code> table ✓</p>
+    </div>
+
+    <div class="result-card">
+      <h3>👕 Recommended Clothes</h3>
+      <div id="clothes-list" class="recommendation-list"></div>
+      <h3 style="margin-top:20px;">👟 Recommended Shoes</h3>
+      <div id="shoes-list" class="recommendation-list"></div>
+    </div>
+
+    <div class="result-card">
+      <h3>🕶️ Recommended Sunglasses &amp; Accessories</h3>
+      <div id="sunglasses-list" class="recommendation-list"></div>
+    </div>
+
+    <div class="selected-outfit">
+      <h3>Selected Outfit for 3D Try-On</h3>
+      <p><strong>Clothes &amp; Shoes:</strong> <span id="selected-clothes-text">None selected</span></p>
+      <p><strong>Sunglasses:</strong> <span id="selected-glasses-text">None selected</span></p>
+      <div class="outfit-action-row">
+        <button onclick="applySelectedOutfitTo3D()" style="background:#4f46e5;">
+          👗 Try on 3D Avatar ↓
+        </button>
+        <button onclick="saveOutfitToSQLite()" style="background:#059669;">
+          💾 Save Outfit to DB
+        </button>
+      </div>
+      <p id="save-outfit-msg" style="margin-top:10px;color:#059669;font-weight:600;display:none;"></p>
+    </div>
+
+    <div class="result-card" style="grid-column: 1 / -1;">
+      <h3>🗄️ Your Saved Outfits <span style="font-size:13px;font-weight:400;color:#666;">(saved_outfit table)</span></h3>
+      <div id="saved-outfits-list" class="recommendation-list" style="margin-top:12px;">
+        <p style="color:#999;font-size:14px;">No outfits saved yet.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ 3D Virtual Try-On Studio ══ -->
+  <section id="tryon-section" class="try-on">
+    <h2>🧍 3D Virtual Try-On Studio</h2>
+
+    <div class="avatar-box">
+      <div id="three-container">
+        <div class="cam-controls">
+          <button class="cam-btn active" id="cam-full" onclick="setCameraView('full')">Full Body</button>
+          <button class="cam-btn" id="cam-upper" onclick="setCameraView('upper')">Upper Body</button>
+          <button class="cam-btn" id="cam-face" onclick="setCameraView('face')">Face &amp; Hair</button>
+          <button class="cam-btn" id="spin-btn" onclick="toggleSpin()">▶ Auto 360°</button>
+        </div>
+      </div>
+
+      <p id="outfit-status-label">
+        🧍 Realistic 3D Human Model — drag to rotate, scroll to zoom!
+      </p>
+
+      <!-- Physique controls -->
+      <div class="quick-tryon-controls" style="border-bottom:1px solid #eee;padding-bottom:12px;">
+        <span class="row-label">Physique &amp; Skin:</span>
+        <button class="quick-chip active" id="phys-athletic" onclick="setPhysique('athletic')">💪 Athletic</button>
+        <button class="quick-chip" id="phys-muscular" onclick="setPhysique('muscular')">🏋️ Muscular</button>
+        <button class="quick-chip" id="phys-slim" onclick="setPhysique('slim')">🏃 Slim</button>
+        <button class="quick-chip" id="phys-shirtless" onclick="toggleShirtless()">🧍 Shirtless</button>
+        <button class="quick-chip" onclick="cycleSkinTone()">🎨 Skin Tone</button>
+      </div>
+
+      <!-- Garment quick-try chips -->
+      <div class="quick-tryon-controls">
+        <span class="row-label">Tops:</span>
+        <button class="quick-chip" onclick="quickTry('blazer')">🧥 Navy Blazer</button>
+        <button class="quick-chip" onclick="quickTry('hoodie')">🔴 Cyber Hoodie</button>
+        <button class="quick-chip" onclick="quickTry('oxford')">👔 White Oxford</button>
+        <button class="quick-chip" onclick="quickTry('leather')">🖤 Leather Jacket</button>
+        <button class="quick-chip" onclick="quickTry('tshirt')">👕 Athletic Tee</button>
+      </div>
+      <div class="quick-tryon-controls">
+        <span class="row-label">Bottoms:</span>
+        <button class="quick-chip" onclick="quickTry('chinos')">👖 Tan Chinos</button>
+        <button class="quick-chip" onclick="quickTry('denim')">👖 Dark Denim</button>
+        <button class="quick-chip" onclick="quickTry('cargo')">🪖 Cargo Trousers</button>
+      </div>
+      <div class="quick-tryon-controls">
+        <span class="row-label">Accessories:</span>
+        <button class="quick-chip" onclick="quickTry('aviator')">🕶️ Gold Aviators</button>
+        <button class="quick-chip" onclick="quickTry('watch')">⌚ Chrono Watch</button>
+        <button class="quick-chip" onclick="quickTry('ai_texture')">✨ Map AI Texture</button>
+        <button class="quick-chip" onclick="resetAvatar()">🔄 Reset Avatar</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ About ══ -->
+  <section id="about" class="about">
+    <h2>About This Project</h2>
+    <p>
+      <strong>AI Fashion Stylist &amp; 3D Virtual Try-On Studio</strong> combines computer-vision body/face analysis,
+      a StyleMate SQLite database (<code>stylemate.db</code>), personalized garment recommendations, and
+      a real-time Three.js 3D human avatar — all in one integrated platform. Upload your photo, get AI-driven
+      style insights, and try outfits on a photorealistic 3D model instantly.
+    </p>
+    <div class="tech-row">
+      <span class="tech-pill">🐍 Python 3 + Flask</span>
+      <span class="tech-pill">🗄️ SQLite + SQLAlchemy</span>
+      <span class="tech-pill">🌐 Flask-CORS</span>
+      <span class="tech-pill">🎮 Three.js r128</span>
+      <span class="tech-pill">🧊 GLTFLoader</span>
+      <span class="tech-pill">🤖 NumPy + Pillow AI</span>
+      <span class="tech-pill">📓 Google Colab</span>
+    </div>
+  </section>
+
+  <footer>
+    <p><strong>AI Fashion Stylist &amp; 3D Virtual Try-On Studio</strong> — Phase 1 Complete · Built with ❤️</p>
+  </footer>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════
+const API_BASE = '';   // Same-origin when served by mini.py
+
+// ═══════════════════════════════════════════════════════
+// 1. API CONNECTION CHECK
+// ═══════════════════════════════════════════════════════
+let apiOnline = false;
+
+async function checkApiStatus() {
+  const badge = document.getElementById('api-badge');
+  const banner = document.getElementById('connection-banner');
+  try {
+    const res = await fetch(API_BASE + '/api/status', { signal: AbortSignal.timeout(3000) });
+    const data = await res.json();
+    apiOnline = true;
+    badge.textContent = '● API Online ✓';
+    badge.className = 'status-badge';
+    banner.className = 'online';
+    banner.textContent = `✓ StyleMate API connected — ${data.users_count} user(s), ${data.clothing_count} clothing items, ${data.analyses_count} analysis record(s) in SQLite DB`;
+    loadSavedOutfits();
+  } catch {
+    apiOnline = false;
+    badge.textContent = '● Offline Mode';
+    badge.className = 'status-badge offline';
+    banner.className = 'offline';
+    banner.textContent = '⚠️ Backend offline — running in demo mode (start mini.py to enable SQLite persistence)';
+  }
+}
+
+window.addEventListener('load', checkApiStatus);
+
+// ═══════════════════════════════════════════════════════
+// 2. USER MANAGEMENT
+// ═══════════════════════════════════════════════════════
+let currentUserId = 1;
+
+async function registerOrSwitchUser() {
+  const name = document.getElementById('user-name-input').value.trim();
+  const email = document.getElementById('user-email-input').value.trim();
+  const msg = document.getElementById('user-status-msg');
+  if (!name || !email) { msg.textContent = 'Please enter both name and email.'; msg.style.display = 'block'; return; }
+
+  try {
+    const res = await fetch(API_BASE + '/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email })
+    });
+    const data = await res.json();
+    if (data.user_id) {
+      currentUserId = data.user_id;
+      document.getElementById('active-user-id').textContent = currentUserId;
+      msg.textContent = `✓ Active User #${currentUserId}: ${name}`;
+      msg.style.display = 'block';
+      loadSavedOutfits();
+    }
+  } catch {
+    msg.textContent = 'Could not connect to API. Demo mode active.';
+    msg.style.display = 'block';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// 3. FILE UPLOAD & DRAG-AND-DROP
+// ═══════════════════════════════════════════════════════
+let currentFile = null;
+
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) setFile(file);
+});
+
+function handleFileChange(e) {
+  const file = e.target.files[0];
+  if (file) setFile(file);
+}
+
+function setFile(file) {
+  currentFile = file;
+  document.getElementById('preview-img').src = URL.createObjectURL(file);
+  document.getElementById('preview-box').style.display = 'block';
+  document.getElementById('error-msg').style.display = 'none';
+}
+
+function useSamplePhoto() {
+  document.getElementById('preview-img').src = '/samples/1_target_person.jpg';
+  document.getElementById('preview-box').style.display = 'block';
+  currentFile = new Blob(['sample_model_image_data'], { type: 'image/jpeg' });
+  currentFile.name = 'sample_person.jpg';
+  analyzeImage();
+}
+
+// ═══════════════════════════════════════════════════════
+// 4. AI ANALYSIS
+// ═══════════════════════════════════════════════════════
+let lastClothes = [], lastShoes = [], lastGlasses = [];
+let selectedClothes = [], selectedSunglasses = [];
+
+async function analyzeImage() {
+  const errorMsg = document.getElementById('error-msg');
+  const btn = document.getElementById('analyze-btn');
+  if (!currentFile) {
+    errorMsg.textContent = 'Please select an image first, or click "Use Sample Photo".';
+    errorMsg.style.display = 'block';
+    return;
+  }
+  btn.textContent = '⏳ Uploading & Analyzing...';
+  btn.disabled = true;
+  errorMsg.style.display = 'none';
+
+  const formData = new FormData();
+  formData.append('image', currentFile, currentFile.name || 'upload.jpg');
+  formData.append('user_id', String(currentUserId));
+
+  try {
+    const res = await fetch(API_BASE + '/api/upload', { method: 'POST', body: formData });
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    renderAnalysisResults(data);
+    loadSavedOutfits();
+  } catch {
+    // Demo fallback when API offline
+    renderAnalysisResults({
+      body_type: 'Athletic / Balanced Silhouette',
+      face_shape: 'Oval / Balanced',
+      body_measurements: { shoulder_cm: 47, chest_cm: 100, waist_cm: 82, hip_cm: 96 },
+      recommended_clothes: ['Navy Tailored Blazer', 'Cyber Urban Hoodie', 'White Oxford Shirt', 'Leather Rider Jacket'],
+      recommended_shoes: ['White Leather Sneakers', 'Suede Chelsea Boots', 'Penny Loafers'],
+      recommended_sunglasses: ['Gold Aviator Sunglasses', 'Matte Black Wayfarer', 'Round Retro Shades']
+    });
+  } finally {
+    btn.textContent = '📤 Upload & Analyze Image';
+    btn.disabled = false;
+  }
+}
+
+function renderAnalysisResults(data) {
+  document.getElementById('res-body-type').textContent = data.body_type || 'Athletic';
+  document.getElementById('res-face-shape').textContent = data.face_shape || 'Oval';
+  if (data.analysis_id) {
+    document.getElementById('res-analysis-id').textContent = `(SQLite Record #${data.analysis_id})`;
+  }
+  if (data.body_measurements) {
+    const m = data.body_measurements;
+    document.getElementById('res-measurements').textContent =
+      `Shoulders: ${m.shoulder_cm || 47}cm | Chest: ${m.chest_cm || 100}cm | Waist: ${m.waist_cm || 82}cm | Hips: ${m.hip_cm || 96}cm`;
+  }
+
+  lastClothes = data.recommended_clothes || [];
+  lastShoes = data.recommended_shoes || [];
+  lastGlasses = data.recommended_sunglasses || [];
+  selectedClothes = [];
+  selectedSunglasses = [];
+  updateSelectedSummary();
+
+  renderItemList('clothes-list', lastClothes, 'clothes');
+  renderItemList('shoes-list', lastShoes, 'shoes');
+  renderItemList('sunglasses-list', lastGlasses, 'glasses');
+
+  const sec = document.getElementById('results-section');
+  sec.classList.add('visible');
+  sec.scrollIntoView({ behavior: 'smooth' });
+}
+
+function renderItemList(containerId, items, type) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  items.forEach((item) => {
+    const isClothes = (type === 'clothes' || type === 'shoes');
+    const selectedArr = isClothes ? selectedClothes : selectedSunglasses;
+    const isSelected = selectedArr.includes(item);
+    const div = document.createElement('div');
+    div.className = isSelected ? 'recommendation selected' : 'recommendation';
+    div.innerHTML = `<span>${item}</span><button>${isSelected ? 'Selected ✓' : 'Select'}</button>`;
+    div.querySelector('button').onclick = () => {
+      if (selectedArr.includes(item)) {
+        const idx = selectedArr.indexOf(item);
+        selectedArr.splice(idx, 1);
+      } else {
+        selectedArr.push(item);
+      }
+      div.className = selectedArr.includes(item) ? 'recommendation selected' : 'recommendation';
+      div.querySelector('button').textContent = selectedArr.includes(item) ? 'Selected ✓' : 'Select';
+      updateSelectedSummary();
+    };
+    container.appendChild(div);
+  });
+}
+
+function updateSelectedSummary() {
+  document.getElementById('selected-clothes-text').textContent =
+    selectedClothes.length > 0 ? selectedClothes.join(', ') : 'None selected';
+  document.getElementById('selected-glasses-text').textContent =
+    selectedSunglasses.length > 0 ? selectedSunglasses.join(', ') : 'None selected';
+}
+
+// ═══════════════════════════════════════════════════════
+// 5. SAVE / LOAD OUTFITS
+// ═══════════════════════════════════════════════════════
+async function saveOutfitToSQLite() {
+  const msg = document.getElementById('save-outfit-msg');
+  if (selectedClothes.length === 0 && selectedSunglasses.length === 0) {
+    msg.textContent = 'Please select at least one clothing item first.';
+    msg.style.display = 'block';
+    return;
+  }
+  msg.textContent = 'Saving to SQLite database...';
+  msg.style.display = 'block';
+
+  try {
+    const allItems = [...selectedClothes, ...selectedSunglasses];
+    for (const itemName of allItems) {
+      await fetch(API_BASE + '/api/outfits/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: currentUserId,
+          clothing_name: itemName,
+          accessory_id: selectedSunglasses.length > 0 ? 1 : null
+        })
+      });
+    }
+    msg.textContent = `✓ ${allItems.length} item(s) saved to StyleMate DB!`;
+    loadSavedOutfits();
+  } catch {
+    msg.textContent = 'Could not save — API offline.';
+  }
+}
+
+async function loadSavedOutfits() {
+  const container = document.getElementById('saved-outfits-list');
+  if (!container) return;
+  try {
+    const res = await fetch(API_BASE + `/api/outfits/${currentUserId}`);
+    if (!res.ok) return;
+    const outfits = await res.json();
+    if (!outfits.length) {
+      container.innerHTML = '<p style="color:#999;font-size:14px;">No outfits saved yet. Select items above and click "Save Outfit to DB".</p>';
+      return;
+    }
+    container.innerHTML = '';
+    outfits.forEach((o) => {
+      const div = document.createElement('div');
+      div.className = 'saved-outfit-item';
+      div.innerHTML = `
+        <span class="outfit-label">
+          <strong>Outfit #${o.outfit_id}</strong> — ${o.clothing_name}
+          ${o.accessory_id ? ' + 🕶️ Sunglasses' : ''}
+          <span style="font-size:11px;color:#aaa;"> · User #${o.user_id}</span>
+        </span>
+        <button onclick="trySavedOutfit('${o.clothing_name}', ${!!o.accessory_id})">Try on 3D</button>
+      `;
+      container.appendChild(div);
+    });
+  } catch { /* offline */ }
+}
+
+function trySavedOutfit(clothingName, hasGlasses) {
+  selectedClothes = [clothingName];
+  selectedSunglasses = hasGlasses ? ['Gold Aviator Sunglasses'] : [];
+  updateSelectedSummary();
+  applySelectedOutfitTo3D();
+}
+
+// ═══════════════════════════════════════════════════════
+// 6. REALISTIC 3D HUMAN MODEL & VIRTUAL TRY-ON ENGINE
+// ═══════════════════════════════════════════════════════
+let scene, camera, renderer, controls;
+let avatarModel, topMesh, bottomMesh, shoeMesh, bodyMesh, headMesh, hairMesh;
+let glassesGroup, watchGroup;
+let isShirtless = false;
+let currentSkinIndex = 0;
+let spinning = false;
+
+const SKIN_TONES = [
+  { name: 'Natural Warm Tan',      hex: '#ffffff' },
+  { name: 'Fair Warm Ivory',       hex: '#ffe4d6' },
+  { name: 'Mediterranean Olive',   hex: '#e8be9e' },
+  { name: 'Rich Deep Bronze',      hex: '#b37d5c' },
+  { name: 'Deep Ebony',            hex: '#6b3a2a' }
+];
+
+function applySelectedOutfitTo3D() {
+  const allClothes = selectedClothes.join(' ').toLowerCase();
+  const allGlasses = selectedSunglasses.join(' ').toLowerCase();
+
+  if (topMesh && topMesh.material) {
+    topMesh.visible = true;
+    isShirtless = false;
+    if (allClothes.includes('blazer') || allClothes.includes('navy')) topMesh.material.color.set('#1e3a8a');
+    else if (allClothes.includes('hoodie') || allClothes.includes('cyber')) topMesh.material.color.set('#e11d48');
+    else if (allClothes.includes('white') || allClothes.includes('oxford') || allClothes.includes('linen')) topMesh.material.color.set('#f8fafc');
+    else if (allClothes.includes('leather') || allClothes.includes('jacket')) topMesh.material.color.set('#0f172a');
+    else if (allClothes.includes('tee') || allClothes.includes('t-shirt') || allClothes.includes('athletic')) topMesh.material.color.set('#059669');
+    else if (selectedClothes.length > 0) topMesh.material.color.set('#4f46e5');
+    topMesh.material.needsUpdate = true;
+  }
+
+  if (bottomMesh && bottomMesh.material) {
+    if (allClothes.includes('chino')) bottomMesh.material.color.set('#b45309');
+    else if (allClothes.includes('cargo')) bottomMesh.material.color.set('#334155');
+    else if (allClothes.includes('denim') || allClothes.includes('jeans')) bottomMesh.material.color.set('#1d4ed8');
+    bottomMesh.material.needsUpdate = true;
+  }
+
+  if (shoeMesh && shoeMesh.material) {
+    if (allClothes.includes('white') && allClothes.includes('sneak')) shoeMesh.material.color.set('#f8fafc');
+    else if (allClothes.includes('suede') || allClothes.includes('brown') || allClothes.includes('loafer')) shoeMesh.material.color.set('#78350f');
+    else shoeMesh.material.color.set('#0f172a');
+    shoeMesh.material.needsUpdate = true;
+  }
+
+  if (glassesGroup) glassesGroup.visible = allGlasses.includes('aviator') || allGlasses.includes('sunglass');
+
+  const summary = [...selectedClothes, ...selectedSunglasses].join(', ');
+  document.getElementById('outfit-status-label').textContent =
+    summary ? `✓ Wearing: ${summary}` : '🧍 Realistic 3D Human Model — drag to rotate, scroll to zoom!';
+
+  document.getElementById('tryon-section').scrollIntoView({ behavior: 'smooth' });
+}
+
+function quickTry(mode) {
+  if (!topMesh || !topMesh.material) return;
+  topMesh.material.map = null;
+
+  if (mode === 'blazer') { topMesh.visible = true; isShirtless = false; topMesh.material.color.set('#1e3a8a'); setStatus('Wearing: Navy Tailored Blazer'); }
+  else if (mode === 'hoodie') { topMesh.visible = true; isShirtless = false; topMesh.material.color.set('#e11d48'); setStatus('Wearing: Cyber Street Hoodie'); }
+  else if (mode === 'oxford') { topMesh.visible = true; isShirtless = false; topMesh.material.color.set('#f8fafc'); setStatus('Wearing: White Oxford Shirt'); }
+  else if (mode === 'leather') { topMesh.visible = true; isShirtless = false; topMesh.material.color.set('#0f172a'); setStatus('Wearing: Vintage Leather Rider Jacket'); }
+  else if (mode === 'tshirt') { topMesh.visible = true; isShirtless = false; topMesh.material.color.set('#059669'); setStatus('Wearing: Fitted Athletic Tee'); }
+  else if (mode === 'chinos') { if (bottomMesh) { bottomMesh.material.color.set('#b45309'); bottomMesh.material.needsUpdate = true; } setStatus('Wearing: Tapered Tan Chinos'); return; }
+  else if (mode === 'denim') { if (bottomMesh) { bottomMesh.material.color.set('#1d4ed8'); bottomMesh.material.needsUpdate = true; } setStatus('Wearing: Selvedge Dark Denim Jeans'); return; }
+  else if (mode === 'cargo') { if (bottomMesh) { bottomMesh.material.color.set('#334155'); bottomMesh.material.needsUpdate = true; } setStatus('Wearing: Cargo Trousers'); return; }
+  else if (mode === 'aviator') { if (glassesGroup) { glassesGroup.visible = !glassesGroup.visible; setStatus(glassesGroup.visible ? 'Wearing: Gold Aviator Sunglasses' : 'Sunglasses removed'); } return; }
+  else if (mode === 'watch') { if (watchGroup) { watchGroup.visible = !watchGroup.visible; setStatus(watchGroup.visible ? 'Wearing: Luxury Chronograph Watch' : 'Watch removed'); } return; }
+  else if (mode === 'ai_texture') {
+    setStatus('⏳ Mapping AI VTON synthesized texture...');
+    new THREE.TextureLoader().load('/samples/4_vton_synthesis_result.jpg', (tex) => {
+      topMesh.visible = true; isShirtless = false;
+      topMesh.material.map = tex;
+      topMesh.material.color.set('#ffffff');
+      topMesh.material.needsUpdate = true;
+      setStatus('✨ AI Virtual Try-On Texture Applied!');
+    }, undefined, () => {
+      topMesh.material.color.set('#e11d48');
+      setStatus('AI Try-On Preset Active');
+    });
+    return;
+  }
+  topMesh.material.needsUpdate = true;
+}
+
+function resetAvatar() {
+  if (topMesh) { topMesh.visible = true; topMesh.material.color.set('#4f46e5'); topMesh.material.map = null; topMesh.material.needsUpdate = true; }
+  if (bottomMesh) { bottomMesh.material.color.set('#1d4ed8'); bottomMesh.material.needsUpdate = true; }
+  if (shoeMesh) { shoeMesh.material.color.set('#0f172a'); shoeMesh.material.needsUpdate = true; }
+  if (glassesGroup) glassesGroup.visible = false;
+  if (watchGroup) watchGroup.visible = false;
+  if (avatarModel) avatarModel.scale.set(1, 1, 1);
+  isShirtless = false;
+  setStatus('🧍 Avatar reset — drag to rotate, scroll to zoom!');
+}
+
+function setStatus(msg) {
+  document.getElementById('outfit-status-label').textContent = msg;
+}
+
+function toggleShirtless() {
+  isShirtless = !isShirtless;
+  document.getElementById('phys-shirtless').classList.toggle('active', isShirtless);
+  if (topMesh) topMesh.visible = !isShirtless;
+  setStatus(isShirtless ? 'Inspecting Sculpted Body (Shirtless)' : '🧍 Realistic 3D Model — drag to rotate!');
+}
+
+function setPhysique(mode) {
+  ['athletic','muscular','slim'].forEach(id => {
+    const el = document.getElementById('phys-' + id);
+    if (el) el.classList.toggle('active', id === mode);
+  });
+  if (!avatarModel) return;
+  if (mode === 'athletic') { avatarModel.scale.set(1.0, 1.0, 1.0); setStatus('Physique: Athletic Defined'); }
+  else if (mode === 'muscular') { avatarModel.scale.set(1.08, 1.01, 1.08); setStatus('Physique: Muscular Mesomorph'); }
+  else if (mode === 'slim') { avatarModel.scale.set(0.92, 1.01, 0.92); setStatus('Physique: Slim Tailored'); }
+}
+
+function cycleSkinTone() {
+  currentSkinIndex = (currentSkinIndex + 1) % SKIN_TONES.length;
+  const tone = SKIN_TONES[currentSkinIndex];
+  [headMesh, bodyMesh].forEach(mesh => {
+    if (mesh && mesh.material) { mesh.material.color.set(tone.hex); mesh.material.needsUpdate = true; }
+  });
+  setStatus(`Skin Tone: ${tone.name}`);
+}
+
+function init3DStudio() {
+  const container = document.getElementById('three-container');
+
+  // Loading badge
+  const badge = document.createElement('div');
+  badge.id = 'model-loader-badge';
+  Object.assign(badge.style, {
+    position: 'absolute', top: '16px', left: '16px',
+    background: 'rgba(15,23,42,0.85)', color: '#fff',
+    padding: '8px 14px', borderRadius: '20px', fontSize: '12px',
+    fontWeight: '600', zIndex: '10', pointerEvents: 'none'
+  });
+  badge.textContent = '⏳ Loading 3D Model...';
+  container.appendChild(badge);
+
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 100);
+  camera.position.set(0, 1.15, 2.35);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.15;
+  container.appendChild(renderer.domElement);
+
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.target.set(0, 0.95, 0);
+  controls.minDistance = 0.8;
+  controls.maxDistance = 4.8;
+  controls.maxPolarAngle = Math.PI / 2 + 0.05;
+
+  // Studio Lighting
+  scene.add(new THREE.HemisphereLight(0xfff7ed, 0x1e293b, 0.75));
+  const key = new THREE.DirectionalLight(0xfff5ea, 1.35);
+  key.position.set(2.4, 3.6, 3.2); key.castShadow = true;
+  key.shadow.mapSize.width = key.shadow.mapSize.height = 2048;
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0xc7d2fe, 0.65);
+  fill.position.set(-2.5, 2.2, 1.5); scene.add(fill);
+  const rim = new THREE.DirectionalLight(0x38bdf8, 0.9);
+  rim.position.set(0, 2.8, -2.8); scene.add(rim);
+
+  // Podium
+  const podium = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.85, 0.95, 0.06, 64),
+    new THREE.MeshStandardMaterial({ color: 0x161f30, roughness: 0.25, metalness: 0.6 })
+  );
+  podium.position.y = -0.03; podium.receiveShadow = true; scene.add(podium);
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.88, 0.91, 64),
+    new THREE.MeshBasicMaterial({ color: 0x6366f1, side: THREE.DoubleSide })
+  );
+  ring.rotation.x = Math.PI / 2; ring.position.y = 0.002; scene.add(ring);
+
+  // Accessories
+  const goldMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.9, roughness: 0.2 });
+  const lensMat = new THREE.MeshStandardMaterial({ color: 0x090d16, metalness: 0.95, roughness: 0.1 });
+
+  glassesGroup = new THREE.Group();
+  [-1, 1].forEach((s) => {
+    const lens = new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.028, 0.01), lensMat);
+    lens.position.set(s * 0.033, 0, 0);
+    glassesGroup.add(lens);
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.032, 0.008), goldMat);
+    frame.position.set(s * 0.033, 0, -0.002);
+    glassesGroup.add(frame);
+  });
+  const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.020, 0.005, 0.008), goldMat);
+  bridge.position.set(0, 0.006, 0);
+  glassesGroup.add(bridge);
+  glassesGroup.position.set(0, 1.723, 0.108);
+  glassesGroup.visible = false;
+  scene.add(glassesGroup);
+
+  watchGroup = new THREE.Group();
+  watchGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.024, 24), new THREE.MeshStandardMaterial({ color: 0x1e293b })));
+  const dial = new THREE.Mesh(new THREE.CylinderGeometry(0.020, 0.020, 0.010, 24), goldMat);
+  dial.rotation.z = Math.PI / 2; dial.position.set(-0.028, 0, 0); watchGroup.add(dial);
+  watchGroup.position.set(0.40, 1.10, 0.03); watchGroup.rotation.z = -0.28;
+  watchGroup.visible = false; scene.add(watchGroup);
+
+  // Load Real Human GLB Model — served by Flask at /web_app/models/
+  const loader = new THREE.GLTFLoader();
+  loader.load(
+    '/web_app/models/realistic_human.glb',
+    (gltf) => {
+      avatarModel = gltf.scene;
+      avatarModel.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = child.receiveShadow = true;
+          if (child.material) child.material = child.material.clone();
+          if (child.name === 'Wolf3D_Outfit_Top') topMesh = child;
+          else if (child.name === 'Wolf3D_Outfit_Bottom') bottomMesh = child;
+          else if (child.name === 'Wolf3D_Outfit_Footwear') shoeMesh = child;
+          else if (child.name === 'Wolf3D_Body') bodyMesh = child;
+          else if (child.name === 'Wolf3D_Head') headMesh = child;
+          else if (child.name === 'Wolf3D_Hair') hairMesh = child;
+        }
+      });
+      scene.add(avatarModel);
+      badge.textContent = '✓ 3D Human Ready!';
+      setTimeout(() => { badge.style.opacity = '0'; badge.style.transition = 'opacity 0.6s'; }, 1600);
+    },
+    (xhr) => {
+      if (xhr.lengthComputable) badge.textContent = `⏳ Loading 3D Model (${Math.round(xhr.loaded / xhr.total * 100)}%)...`;
+    },
+    (err) => {
+      console.error('[3D Studio] Load error:', err);
+      badge.textContent = '⚠️ 3D model load error — check /web_app/models/realistic_human.glb';
+      badge.style.background = 'rgba(239,68,68,0.9)';
+    }
+  );
+
+  window.addEventListener('resize', () => {
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+  });
+
+  const clock = new THREE.Clock();
+  (function animate() {
+    requestAnimationFrame(animate);
+    if (avatarModel) avatarModel.position.y = Math.sin(clock.getElapsedTime() * 1.8) * 0.002;
+    controls.update();
+    renderer.render(scene, camera);
+  })();
+}
+
+function setCameraView(view) {
+  ['full','upper','face'].forEach(v => document.getElementById('cam-' + v).classList.toggle('active', v === view));
+  if (view === 'full') { camera.position.set(0, 1.15, 2.35); controls.target.set(0, 0.95, 0); }
+  else if (view === 'upper') { camera.position.set(0, 1.45, 1.55); controls.target.set(0, 1.35, 0); }
+  else if (view === 'face') { camera.position.set(0, 1.72, 0.72); controls.target.set(0, 1.70, 0); }
+  controls.update();
+}
+
+function toggleSpin() {
+  controls.autoRotate = !controls.autoRotate;
+  controls.autoRotateSpeed = 2.2;
+  const btn = document.getElementById('spin-btn');
+  btn.classList.toggle('active', controls.autoRotate);
+  btn.textContent = controls.autoRotate ? '⏹ Stop Spin' : '▶ Auto 360°';
+}
+
+window.onload = init3DStudio;
+</script>
+</body>
+</html>

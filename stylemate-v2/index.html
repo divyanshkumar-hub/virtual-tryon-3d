@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StyleMate v2 — AI Fashion Stylist & 3D Virtual Try-On Studio</title>
+  <!-- Local Three.js libraries (100% offline capable) -->
+  <script src="/web_app/js/three.min.js"></script>
+  <script src="/web_app/js/OrbitControls.js"></script>
+  <script src="/web_app/js/GLTFLoader.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --card-border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --accent: #10b981;
+      --danger: #ef4444;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: rgba(15, 23, 42, 0.95);
+      border-bottom: 1px solid var(--card-border);
+      padding: 14px 4%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(8px);
+    }
+    .logo {
+      font-size: 20px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      letter-spacing: -0.5px;
+    }
+    .badge {
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      font-weight: 600;
+    }
+    .main-grid {
+      display: grid;
+      grid-template-columns: 460px 1fr;
+      gap: 20px;
+      padding: 20px 4%;
+      flex: 1;
+    }
+    @media (max-width: 1024px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--text);
+    }
+    .upload-zone {
+      border: 2px dashed var(--card-border);
+      border-radius: 10px;
+      padding: 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: rgba(15, 23, 42, 0.4);
+    }
+    .upload-zone:hover {
+      border-color: var(--primary);
+      background: rgba(99, 102, 241, 0.05);
+    }
+    .input-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    input[type="number"], input[type="text"] {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--card-border);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      flex: 1;
+    }
+    button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 9px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover { background: var(--primary-hover); }
+    button.secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+    }
+    button.secondary:hover { background: rgba(255, 255, 255, 0.15); }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin: 12px 0;
+    }
+    .metric-item {
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--card-border);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    .metric-val {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      margin-top: 2px;
+    }
+    .clothing-pill {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 9px 12px;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .clothing-pill:hover { border-color: var(--primary); }
+    .canvas-container {
+      position: relative;
+      height: 600px;
+      background: radial-gradient(circle at 50% 30%, #1e293b 0%, #0f172a 75%);
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--card-border);
+    }
+    #three-canvas { width: 100%; height: 100%; display: block; }
+    .studio-overlay {
+      position: absolute;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 6px;
+      background: rgba(15, 23, 42, 0.85);
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(8px);
+      z-index: 10;
+    }
+    .chip {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--card-border);
+      color: #fff;
+      font-size: 12px;
+      padding: 5px 11px;
+      border-radius: 16px;
+      cursor: pointer;
+    }
+    .chip:hover, .chip.active {
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+    .status-toast {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid var(--card-border);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <span>👗 StyleMate v2</span>
+      <span class="badge" id="api-status-badge">API Online ✓</span>
+    </div>
+    <div style="font-size: 13px; color: var(--text-muted);">
+      AI Body Analysis &amp; 3D Virtual Try-On Studio
+    </div>
+  </header>
+
+  <main class="main-grid">
+    <!-- Left Column: Controls & CV Analysis -->
+    <section>
+      <!-- Upload Card -->
+      <div class="card">
+        <div class="card-title">
+          <span>📸 1. Full-Body Image Upload</span>
+          <span style="font-size: 11px; color: var(--text-muted);">MediaPipe Pose (33 Landmarks)</span>
+        </div>
+        <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+          <div style="font-size: 32px; margin-bottom: 6px;">📤</div>
+          <div style="font-size: 13px; font-weight: 500;">Click to select or drag photo here</div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">JPG, PNG up to 16MB</div>
+          <input type="file" id="file-input" accept="image/*" style="display:none;" onchange="handleFile(event)" />
+        </div>
+        <div id="preview-wrap" style="display:none; margin-top:12px; text-align:center;">
+          <img id="preview-img" style="max-height: 160px; border-radius: 6px; border: 1px solid var(--card-border);" />
+        </div>
+        <div class="input-row">
+          <input type="number" id="height-input" value="175" placeholder="Standing Height (cm)" title="Your real height in cm" />
+          <button onclick="analyzeImage()" id="analyze-btn">Analyze Body</button>
+          <button class="secondary" onclick="useSample()">Use Sample</button>
+        </div>
+      </div>
+
+      <!-- CV Analysis Results -->
+      <div class="card" id="results-card" style="display:none;">
+        <div class="card-title">
+          <span>📐 2. Real Body Dimensions</span>
+          <span class="badge" id="method-badge">MediaPipe Real</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+          <div>
+            <div style="font-size:11px; color:var(--text-muted);">BODY TYPE</div>
+            <div style="font-weight:700; font-size:14px;" id="res-body-type">-</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:11px; color:var(--text-muted);">RECOMMENDED SIZE</div>
+            <div style="font-weight:700; font-size:15px; color:var(--accent);" id="res-size">-</div>
+          </div>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-item">
+            <span style="color:var(--text-muted);">Shoulders:</span>
+            <div class="metric-val" id="res-shoulder">-</div>
+          </div>
+          <div class="metric-item">
+            <span style="color:var(--text-muted);">Chest Circumference:</span>
+            <div class="metric-val" id="res-chest">-</div>
+          </div>
+          <div class="metric-item">
+            <span style="color:var(--text-muted);">Waist Circumference:</span>
+            <div class="metric-val" id="res-waist">-</div>
+          </div>
+          <div class="metric-item">
+            <span style="color:var(--text-muted);">Hip Circumference:</span>
+            <div class="metric-val" id="res-hip">-</div>
+          </div>
+        </div>
+        <div style="font-size:11px; color:var(--text-muted); margin-bottom: 12px;">
+          Fit Confidence: <strong style="color:var(--accent);" id="res-conf">97.4%</strong> | Face: <span id="res-face">Oval</span>
+        </div>
+
+        <button onclick="applyMeasuredBody()" style="width:100%; background:var(--accent);">
+          🎯 Apply Measured Body to 3D Mannequin
+        </button>
+      </div>
+
+      <!-- Recommended Clothes -->
+      <div class="card">
+        <div class="card-title">
+          <span>👕 3. Garment Catalog &amp; Try-On</span>
+          <span style="font-size:11px; color:var(--text-muted);">Click to try on 3D avatar</span>
+        </div>
+        <div id="clothing-list">
+          <!-- Populated from /api/clothing -->
+        </div>
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button onclick="saveCurrentOutfit()" style="flex:1;">💾 Save Outfit to DB</button>
+          <button class="secondary" onclick="resetAvatar()">🔄 Reset</button>
+        </div>
+        <div id="save-msg" style="display:none; font-size:12px; color:var(--accent); margin-top:8px;"></div>
+      </div>
+    </section>
+
+    <!-- Right Column: 3D Studio -->
+    <section>
+      <div class="canvas-container">
+        <div class="status-toast" id="studio-status">
+          ⏳ Loading 3D Mannequin...
+        </div>
+        <div class="studio-overlay">
+          <button class="chip active" onclick="setCam('full')">Full</button>
+          <button class="chip" onclick="setCam('upper')">Upper</button>
+          <button class="chip" onclick="setCam('face')">Face</button>
+          <button class="chip" id="spin-btn" onclick="toggleSpin()">Spin</button>
+          <button class="chip" onclick="cycleSkin()">Skin</button>
+        </div>
+        <div id="three-container" style="width:100%; height:100%;"></div>
+      </div>
+
+      <!-- Quick Try Chips -->
+      <div class="card" style="margin-top:14px; padding:14px 20px;">
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px; font-weight:600; text-transform:uppercase;">
+          Quick Try-On Presets:
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+          <button class="chip" onclick="applyPreset('blazer', '#1e3a8a')">🧥 Navy Blazer</button>
+          <button class="chip" onclick="applyPreset('hoodie', '#e11d48')">🔴 Cyber Hoodie</button>
+          <button class="chip" onclick="applyPreset('oxford', '#f8fafc')">👔 White Oxford</button>
+          <button class="chip" onclick="applyPreset('leather', '#0f172a')">🖤 Leather Jacket</button>
+          <button class="chip" onclick="applyPreset('tee', '#059669')">👕 Athletic Tee</button>
+          <button class="chip" onclick="applyPreset('chinos', '#b45309', 'bottom')">👖 Tan Chinos</button>
+          <button class="chip" onclick="applyPreset('denim', '#1d4ed8', 'bottom')">👖 Dark Denim</button>
+          <button class="chip" onclick="toggleGlasses()">🕶️ Gold Aviators</button>
+          <button class="chip" onclick="applyAiTexture()">✨ Map AI Texture</button>
+        </div>
+      </div>
+
+      <!-- Saved Outfits Drawer -->
+      <div class="card" style="padding:14px 20px;">
+        <div class="card-title" style="margin-bottom:8px;">
+          <span>🗄️ Saved Outfits (SQLite)</span>
+        </div>
+        <div id="saved-outfits" style="font-size:12px; color:var(--text-muted);">
+          No outfits saved yet.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let scene, camera, renderer, controls;
+    let avatarModel = null, topMesh = null, bottomMesh = null, headMesh = null;
+    let glassesGroup = null;
+    let isProcedural = false;
+    let selectedFile = null;
+    let currentMeasurements = null;
+    let currentGarment = { name: "Navy Tailored Double-Breasted Blazer", color: "#1e3a8a" };
+
+    const SKIN_TONES = ['#ffffff', '#ffe4d6', '#e8be9e', '#b37d5c', '#6b3a2a'];
+    let skinIdx = 0;
+
+    // ── 3D Scene Initialization ────────────────────────────────
+    function init3D() {
+      const container = document.getElementById('three-container');
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 100);
+      camera.position.set(0, 1.15, 2.35);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      container.appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.target.set(0, 0.95, 0);
+
+      // Lighting
+      scene.add(new THREE.HemisphereLight(0xfff7ed, 0x1e293b, 0.8));
+      const dirLight = new THREE.DirectionalLight(0xfff5ea, 1.4);
+      dirLight.position.set(2, 3, 3);
+      scene.add(dirLight);
+      const fillLight = new THREE.DirectionalLight(0x38bdf8, 0.8);
+      fillLight.position.set(-2, 2, -2);
+      scene.add(fillLight);
+
+      // Studio Podium
+      const podium = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.85, 0.95, 0.05, 48),
+        new THREE.MeshStandardMaterial({ color: 0x161f30, roughness: 0.3 })
+      );
+      podium.position.y = -0.025;
+      scene.add(podium);
+
+      // Gold Aviator Glasses
+      buildGlasses();
+
+      // Load GLTF Realistic Human, or Fallback to Procedural Mannequin
+      loadModel();
+
+      window.addEventListener('resize', () => {
+        const nw = container.clientWidth, nh = container.clientHeight;
+        camera.aspect = nw / nh;
+        camera.updateProjectionMatrix();
+        renderer.setSize(nw, nh);
+      });
+
+      const clock = new THREE.Clock();
+      (function animate() {
+        requestAnimationFrame(animate);
+        const t = clock.getElapsedTime();
+        if (avatarModel) {
+          avatarModel.position.y = Math.sin(t * 1.8) * 0.003;
+        }
+        controls.update();
+        renderer.render(scene, camera);
+      })();
+    }
+
+    function buildGlasses() {
+      glassesGroup = new THREE.Group();
+      const goldMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.9, roughness: 0.2 });
+      const lensMat = new THREE.MeshStandardMaterial({ color: 0x090d16, metalness: 0.95, roughness: 0.1 });
+      [-1, 1].forEach(side => {
+        const lens = new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.028, 0.01), lensMat);
+        lens.position.set(side * 0.033, 0, 0);
+        const rim = new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.032, 0.008), goldMat);
+        rim.position.set(side * 0.033, 0, -0.002);
+        glassesGroup.add(lens, rim);
+      });
+      const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.005, 0.008), goldMat);
+      bridge.position.set(0, 0.006, 0);
+      glassesGroup.add(bridge);
+      glassesGroup.position.set(0, 1.723, 0.108);
+      glassesGroup.visible = false;
+      scene.add(glassesGroup);
+    }
+
+    function buildProceduralMannequin() {
+      isProcedural = true;
+      avatarModel = new THREE.Group();
+
+      const skinMat = new THREE.MeshStandardMaterial({ color: 0xe8be9e, roughness: 0.5 });
+      const topMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.4 });
+      const bottomMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.5 });
+
+      // Head
+      headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.12, 32, 32), skinMat);
+      headMesh.position.y = 1.70;
+      headMesh.scale.set(0.9, 1.1, 1.0);
+      avatarModel.add(headMesh);
+
+      // Torso / Top
+      topMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.16, 0.55, 32), topMat);
+      topMesh.position.y = 1.25;
+      avatarModel.add(topMesh);
+
+      // Legs / Bottom
+      bottomMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.12, 0.90, 32), bottomMat);
+      bottomMesh.position.y = 0.52;
+      avatarModel.add(bottomMesh);
+
+      scene.add(avatarModel);
+      document.getElementById('studio-status').textContent = '✓ Procedural 3D Mannequin Active';
+    }
+
+    function loadModel() {
+      const loader = new THREE.GLTFLoader();
+      const modelUrl = '/web_app/models/realistic_human.glb';
+      let loaded = false;
+
+      // Timeout fallback if GLB takes > 6s
+      const fallbackTimer = setTimeout(() => {
+        if (!loaded) {
+          console.warn('GLB load timeout -> activating procedural mannequin fallback');
+          buildProceduralMannequin();
+        }
+      }, 5000);
+
+      loader.load(
+        modelUrl,
+        (gltf) => {
+          loaded = true;
+          clearTimeout(fallbackTimer);
+          if (isProcedural && avatarModel) {
+            scene.remove(avatarModel);
+          }
+          avatarModel = gltf.scene;
+          avatarModel.traverse((child) => {
+            if (child.isMesh) {
+              if (child.material) child.material = child.material.clone();
+              if (child.name === 'Wolf3D_Outfit_Top') topMesh = child;
+              else if (child.name === 'Wolf3D_Outfit_Bottom') bottomMesh = child;
+              else if (child.name === 'Wolf3D_Head' || child.name === 'Wolf3D_Body') headMesh = child;
+            }
+          });
+          scene.add(avatarModel);
+          document.getElementById('studio-status').textContent = '✓ Photorealistic 3D Human Ready';
+          setTimeout(() => { document.getElementById('studio-status').style.opacity = '0'; }, 1500);
+        },
+        (xhr) => {
+          if (xhr.lengthComputable) {
+            const p = Math.round((xhr.loaded / xhr.total) * 100);
+            document.getElementById('studio-status').textContent = `⏳ Loading 3D Model (${p}%)...`;
+          }
+        },
+        (err) => {
+          console.warn('GLB error -> fallback to procedural', err);
+          if (!loaded) buildProceduralMannequin();
+        }
+      );
+    }
+
+    // ── Garment Controls ────────────────────────────────────────
+    function applyPreset(tag, colorHex, part = 'top') {
+      currentGarment = { name: tag, color: colorHex };
+      if (part === 'top' && topMesh) {
+        topMesh.material.map = null;
+        topMesh.material.color.set(colorHex);
+        topMesh.material.needsUpdate = true;
+      } else if (part === 'bottom' && bottomMesh) {
+        bottomMesh.material.color.set(colorHex);
+        bottomMesh.material.needsUpdate = true;
+      }
+      document.getElementById('studio-status').style.opacity = '1';
+      document.getElementById('studio-status').textContent = `Wearing: ${tag}`;
+    }
+
+    function toggleGlasses() {
+      if (glassesGroup) {
+        glassesGroup.visible = !glassesGroup.visible;
+      }
+    }
+
+    function applyAiTexture() {
+      if (!topMesh) return;
+      new THREE.TextureLoader().load('/samples/4_vton_synthesis_result.jpg', (tex) => {
+        topMesh.material.map = tex;
+        topMesh.material.color.set('#ffffff');
+        topMesh.material.needsUpdate = true;
+        document.getElementById('studio-status').style.opacity = '1';
+        document.getElementById('studio-status').textContent = '✨ AI Synthesized Garment Texture Applied';
+      });
+    }
+
+    function cycleSkin() {
+      skinIdx = (skinIdx + 1) % SKIN_TONES.length;
+      if (headMesh) {
+        headMesh.material.color.set(SKIN_TONES[skinIdx]);
+        headMesh.material.needsUpdate = true;
+      }
+    }
+
+    function setCam(view) {
+      if (view === 'full') {
+        camera.position.set(0, 1.15, 2.35);
+        controls.target.set(0, 0.95, 0);
+      } else if (view === 'upper') {
+        camera.position.set(0, 1.45, 1.55);
+        controls.target.set(0, 1.35, 0);
+      } else if (view === 'face') {
+        camera.position.set(0, 1.72, 0.72);
+        controls.target.set(0, 1.70, 0);
+      }
+    }
+
+    function toggleSpin() {
+      controls.autoRotate = !controls.autoRotate;
+      controls.autoRotateSpeed = 2.5;
+      document.getElementById('spin-btn').classList.toggle('active', controls.autoRotate);
+    }
+
+    function resetAvatar() {
+      if (avatarModel) avatarModel.scale.set(1, 1, 1);
+      if (topMesh) { topMesh.material.color.set('#1e3a8a'); topMesh.material.map = null; topMesh.material.needsUpdate = true; }
+      if (bottomMesh) { bottomMesh.material.color.set('#1d4ed8'); bottomMesh.material.needsUpdate = true; }
+      if (glassesGroup) glassesGroup.visible = false;
+      document.getElementById('studio-status').textContent = '✓ Avatar reset';
+    }
+
+    // ── CV Body Scaling ─────────────────────────────────────────
+    function applyMeasuredBody() {
+      if (!avatarModel || !currentMeasurements) return;
+      const sh = currentMeasurements.shoulder_cm || 48.0;
+      const waist = currentMeasurements.waist_cm || 82.0;
+      const hip = currentMeasurements.hip_cm || 96.0;
+      const ht = currentMeasurements.height_cm || 175.0;
+
+      const sx = Math.min(Math.max(sh / 48.0, 0.82), 1.25);
+      const sy = Math.min(Math.max(ht / 175.0, 0.85), 1.20);
+      const sz = Math.min(Math.max(((waist / 82.0) + (hip / 96.0)) / 2.0, 0.82), 1.25);
+
+      avatarModel.scale.set(sx, sy, sz);
+      document.getElementById('studio-status').style.opacity = '1';
+      document.getElementById('studio-status').textContent = `🎯 Mannequin scaled to ${sh}cm shoulders, ${ht}cm height`;
+    }
+
+    // ── Photo Upload & Analysis ─────────────────────────────────
+    function handleFile(e) {
+      const file = e.target.files[0];
+      if (file) {
+        selectedFile = file;
+        document.getElementById('preview-img').src = URL.createObjectURL(file);
+        document.getElementById('preview-wrap').style.display = 'block';
+      }
+    }
+
+    function useSample() {
+      document.getElementById('preview-img').src = '/samples/1_target_person.jpg';
+      document.getElementById('preview-wrap').style.display = 'block';
+      selectedFile = new Blob(['sample_person_data'], { type: 'image/jpeg' });
+      selectedFile.name = 'sample.jpg';
+      analyzeImage();
+    }
+
+    async function analyzeImage() {
+      const btn = document.getElementById('analyze-btn');
+      btn.textContent = 'Analyzing...';
+      btn.disabled = true;
+
+      const fd = new FormData();
+      if (selectedFile) fd.append('image', selectedFile, selectedFile.name || 'photo.jpg');
+      const ht = document.getElementById('height-input').value || 175;
+      fd.append('height_cm', ht);
+
+      try {
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+
+        currentMeasurements = data.body_measurements;
+        document.getElementById('res-body-type').textContent = data.body_type;
+        document.getElementById('res-size').textContent = `Size ${data.clothing_size}`;
+        document.getElementById('res-shoulder').textContent = `${currentMeasurements.shoulder_cm} cm`;
+        document.getElementById('res-chest').textContent = `${currentMeasurements.chest_cm} cm`;
+        document.getElementById('res-waist').textContent = `${currentMeasurements.waist_cm} cm`;
+        document.getElementById('res-hip').textContent = `${currentMeasurements.hip_cm} cm`;
+        document.getElementById('res-conf').textContent = `${data.fit_confidence}%`;
+        document.getElementById('res-face').textContent = data.face_shape;
+
+        const badge = document.getElementById('method-badge');
+        badge.textContent = data.analysis_method === 'mediapipe_real' ? 'MediaPipe Pose ✓' : 'CV Silhouette';
+
+        document.getElementById('results-card').style.display = 'block';
+        applyMeasuredBody();
+      } catch (err) {
+        alert('Could not complete analysis. Check server connection.');
+      } finally {
+        btn.textContent = 'Analyze Body';
+        btn.disabled = false;
+      }
+    }
+
+    // ── Clothing & Outfits API ──────────────────────────────────
+    async function loadClothing() {
+      try {
+        const res = await fetch('/api/clothing');
+        const items = await res.json();
+        const list = document.getElementById('clothing-list');
+        list.innerHTML = '';
+        items.forEach(c => {
+          const div = document.createElement('div');
+          div.className = 'clothing-pill';
+          div.innerHTML = `
+            <span>${c.name}</span>
+            <button onclick="applyPreset('${c.name}', '${c.color}', '${c.category === 'bottoms' ? 'bottom' : 'top'}')">Try On</button>
+          `;
+          list.appendChild(div);
+        });
+      } catch (err) {
+        console.warn('Clothing catalog fetch error', err);
+      }
+    }
+
+    async function saveCurrentOutfit() {
+      try {
+        const res = await fetch('/api/outfits', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: 1,
+            clothing_name: currentGarment.name,
+            clothing_color: currentGarment.color,
+            accessory: glassesGroup && glassesGroup.visible ? 'Gold Aviators' : null
+          })
+        });
+        const d = await res.json();
+        const msg = document.getElementById('save-msg');
+        msg.textContent = `✓ Outfit #${d.outfit_id} saved to StyleMate SQLite!`;
+        msg.style.display = 'block';
+        loadSavedOutfits();
+      } catch (err) {
+        alert('Could not save outfit.');
+      }
+    }
+
+    async function loadSavedOutfits() {
+      try {
+        const res = await fetch('/api/outfits/1');
+        const outfits = await res.json();
+        const container = document.getElementById('saved-outfits');
+        if (!outfits.length) {
+          container.textContent = 'No outfits saved yet.';
+          return;
+        }
+        container.innerHTML = outfits.map(o => `
+          <div style="padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+            <strong>#${o.outfit_id}:</strong> ${o.clothing_name} ${o.accessory ? '+ ' + o.accessory : ''}
+          </div>
+        `).join('');
+      } catch (err) {}
+    }
+
+    // Initialize
+    window.onload = () => {
+      init3D();
+      loadClothing();
+      loadSavedOutfits();
+    };
+  </script>
+</body>
+</html>
