@@ -17,6 +17,7 @@ UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 SAMPLES_DIR = os.path.join(BASE_DIR, "samples")
 WEB_APP_DIR = os.path.join(BASE_DIR, "web_app")
 STATIC_HTML = os.path.join(BASE_DIR, "index.html")
+REACT_DIST_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "fashion-frontend", "fashion-frontend", "dist"))
 
 for path in (INSTANCE_DIR, UPLOAD_DIR):
     os.makedirs(path, exist_ok=True)
@@ -158,14 +159,36 @@ def try_on():
     })
 
 
+@app.route("/api/users", methods=["GET"])
+def get_users():
+    users = User.query.all()
+    return jsonify([{"id": u.id, "name": u.name, "email": u.email} for u in users])
+
+
+@app.route("/api/users", methods=["POST"])
+def register_user():
+    data = request.get_json() or {}
+    name = data.get("name")
+    email = data.get("email")
+    if not name or not email:
+        return jsonify({"error": "name and email required"}), 400
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        user = User(name=name, email=email)
+        db.session.add(user)
+        db.session.commit()
+    return jsonify({"message": "User registered", "user_id": user.id, "name": user.name}), 201
+
+
 @app.route("/api/outfits", methods=["POST"])
+@app.route("/api/outfits/save", methods=["POST"])
 def save_outfit():
     data = request.get_json() or {}
     user_id = int(data.get("user_id", 1))
     clothing_id = int(data.get("clothing_id", 1))
     clothing_name = data.get("clothing_name", "Selected Garment")
     clothing_color = data.get("clothing_color", "#4f46e5")
-    accessory = data.get("accessory")
+    accessory = data.get("accessory") or (data.get("accessory_id") and "Gold Aviators")
 
     outfit = SavedOutfit(
         user_id=user_id,
@@ -176,7 +199,12 @@ def save_outfit():
     )
     db.session.add(outfit)
     db.session.commit()
-    return jsonify({"message": "Outfit saved", "outfit_id": outfit.id}), 201
+    return jsonify({
+        "message": "Outfit saved",
+        "outfit_id": outfit.id,
+        "clothing_name": clothing_name,
+        "clothing_id": clothing_id
+    }), 201
 
 
 @app.route("/api/outfits/<int:user_id>", methods=["GET"])
@@ -190,6 +218,12 @@ def get_user_outfits(user_id):
 
 
 # Static assets
+@app.route("/models/<path:filename>")
+def serve_models(filename):
+    models_dir = os.path.join(WEB_APP_DIR, "models")
+    return send_from_directory(models_dir, filename)
+
+
 @app.route("/uploads/<path:filename>")
 def serve_uploads(filename):
     return send_from_directory(UPLOAD_DIR, filename)
@@ -203,6 +237,21 @@ def serve_samples(filename):
 @app.route("/web_app/<path:filename>")
 def serve_web_app(filename):
     return send_from_directory(WEB_APP_DIR, filename)
+
+
+# Serve partner's built React frontend directly from Flask
+@app.route("/react")
+def serve_react():
+    if os.path.exists(REACT_DIST_DIR):
+        return send_from_directory(REACT_DIST_DIR, "index.html")
+    return "React build not found", 404
+
+
+@app.route("/assets/<path:filename>")
+def serve_react_assets(filename):
+    if os.path.exists(REACT_DIST_DIR):
+        return send_from_directory(os.path.join(REACT_DIST_DIR, "assets"), filename)
+    return "Not found", 404
 
 
 def seed_database():
