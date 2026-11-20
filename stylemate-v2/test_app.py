@@ -116,3 +116,32 @@ def test_api_upload_endpoint(client):
         assert res_data["success"] is True
         assert "clothing_size" in res_data
         assert res_data["body_measurements"]["height_cm"] == 180.0
+
+
+def test_root_and_studio_routes(client):
+    root_res = client.get("/")
+    assert root_res.status_code == 200
+
+    studio_res = client.get("/studio")
+    assert studio_res.status_code in (200, 302)
+
+
+def test_api_analyze_with_calibration(client):
+    if os.path.exists(SAMPLE_IMG_PATH):
+        with open(SAMPLE_IMG_PATH, "rb") as f:
+            img_bytes = f.read()
+        data = {
+            "image": (io.BytesIO(img_bytes), "test_person.jpg"),
+            "height_cm": "172",
+            "gender": "male"
+        }
+        res = client.post("/api/analyze", data=data, content_type="multipart/form-data")
+        assert res.status_code == 200
+        data = res.get_json()
+        assert data["success"] is True
+        assert "body_measurements" in data
+        assert data["body_measurements"]["height_cm"] == 172.0
+        assert data["body_measurements"]["gender"] == "male"
+        assert len(data["recommended_clothes"]) >= 1
+        assert len(data["recommended_shoes"]) >= 1
+        assert len(data["recommended_sunglasses"]) >= 1
