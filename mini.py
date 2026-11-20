@@ -93,12 +93,12 @@ def extract_image_features_pure_python(image_bytes):
     return w, h, avg_tone
 
 
-def run_ai_fashion_analysis(image_bytes):
+def run_ai_fashion_analysis(image_bytes, user_height_cm: float = 175.0, gender: str = "unisex"):
     """
     Runs CV-backed body & face shape analysis and produces measurements + outfit recommendations.
     Uses MediaPipe Pose/FaceMesh via vision_analyzer.py with automatic Pillow fallback.
     """
-    cv = analyze_image_bytes(image_bytes)
+    cv = analyze_image_bytes(image_bytes, user_height_cm=user_height_cm, gender=gender)
     w = cv.get("image_width", 384)
     h = cv.get("image_height", 512)
     ratio = round(h / max(w, 1), 2)
@@ -389,7 +389,9 @@ def upload_image():
     with open(save_path, "wb") as f:
         f.write(image_bytes)
 
-    ai_result = run_ai_fashion_analysis(image_bytes)
+    user_height_cm = float(request.form.get("height_cm", 175.0))
+    gender = request.form.get("gender", "unisex")
+    ai_result = run_ai_fashion_analysis(image_bytes, user_height_cm=user_height_cm, gender=gender)
 
     analysis = Analysis(
         user_id=int(user_id),
@@ -446,7 +448,9 @@ def analyze_and_store():
     with open(sample_copy, "wb") as f:
         f.write(image_bytes)
 
-    ai_result = run_ai_fashion_analysis(image_bytes)
+    user_height_cm = float(request.form.get("height_cm", 175.0))
+    gender = request.form.get("gender", "unisex")
+    ai_result = run_ai_fashion_analysis(image_bytes, user_height_cm=user_height_cm, gender=gender)
 
     # Persist into SQLite Analysis table
     user = db.session.get(User, user_id)
