@@ -47,3 +47,11 @@ desktop.ini
 # Temporary
 *.tmp
 *.bak
+
+# Experimental model services (large / generated)
+services/eval_data/
+services/eval_results/
+services/models/*.task
+services/models/*.tflite
+services/logs/
+static/catalog/user/

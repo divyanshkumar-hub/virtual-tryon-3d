@@ -21,11 +21,17 @@ py --version
 
 echo.
 echo [2/3] Installing / verifying Python dependencies...
-py -m pip install flask flask-cors flask-sqlalchemy werkzeug pillow numpy --quiet --disable-pip-version-check
+py -m pip install -r requirements.txt --quiet --disable-pip-version-check
 echo      Dependencies OK!
 
 echo.
-echo [3/3] Starting StyleMate Flask Server on port 5000...
+echo [3/3] Starting AI model services (optional) and StyleMate on port 5000...
+if exist "services\.venv\Scripts\python.exe" (
+    call services\start_services.bat
+    echo      AI services starting in their own windows ^(test bench: http://localhost:5100^)
+) else (
+    echo      services\.venv not found - running without AI services ^(see services\README.md^)
+)
 echo       The app will open in your browser automatically.
 echo       Press Ctrl+C to stop the server.
 echo.

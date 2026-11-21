@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio Check</title>
+<!-- Developer page: renders AvatarStudio in a given state for visual checks.
+     e.g. /static/dev/studio_check.html?wind=0.6&item={"category":"dresses","color":"#be123c","fabric":"silk"}&wind=0.8 -->
+<script src="/web_app/js/three.min.js"></script>
+<script src="/web_app/js/OrbitControls.js"></script>
+<script src="/web_app/js/GLTFLoader.js"></script>
+<script src="/static/js/avatar_studio.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; background: #0f172a; font: 13px system-ui, sans-serif; color: #e2e8f0; }
+  #c { position: absolute; inset: 0; }
+  #log { position: absolute; left: 8px; bottom: 8px; right: 8px; white-space: pre-wrap; color: #fca5a5; z-index: 5; }
+  #status { position: absolute; right: 10px; top: 10px; z-index: 5; background: rgba(0,0,0,.5); padding: 4px 8px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<div id="c"></div><div id="status"></div><div id="log"></div>
+<script>
+  const log = (m) => { document.getElementById('log').textContent += m + '\n'; };
+  window.onerror = (msg, src, line) => log(`ERROR ${msg} @${line}`);
+  const q = new URLSearchParams(location.search);
+  const J = (k) => { try { return q.get(k) ? JSON.parse(q.get(k)) : null; } catch (e) { log('bad json ' + k); return null; } };
+  AvatarStudio.init(document.getElementById('c'), {
+    preserveDrawingBuffer: true,
+    onStatus: (s) => { document.getElementById('status').textContent = s; },
+    onReady: async () => {
+      if (q.get('matrix')) return runMatrix();
+      try {
+        const m = J('m');
+        if (m) AvatarStudio.setMeasurements(m, { age: q.get('age') ? Number(q.get('age')) : null });
+        (J('items') || (J('item') ? [J('item')] : [])).forEach((it) => AvatarStudio.applyItem(it));
+        if (q.get('wind')) AvatarStudio.setWind(q.get('wind'));
+        const fit = J('fit');
+        if (fit) { AvatarStudio.setFit(fit.category, fit.regions); AvatarStudio.showHeat(true); }
+        AvatarStudio.settle(Number(q.get('settle') || 2.3));
+        AvatarStudio.frameCamera(q.get('view') || 'full');
+        if (q.get('yaw')) {
+          const S = AvatarStudio._state, a = Number(q.get('yaw')), c = S.camera.position, t = S.controls.target;
+          const r = Math.hypot(c.x - t.x, c.z - t.z);
+          c.x = t.x + Math.sin(a) * r; c.z = t.z + Math.cos(a) * r;
+        }
+        const worn = AvatarStudio.wornItems().map((w) => w.slot + ': ' + w.name).join(' | ');
+        const el = document.getElementById('log');
+        el.style.color = '#e2e8f0';
+        log(`worn: ${worn || '(base outfit)'}\ncloth points inside body: ${AvatarStudio.clothPenetration()}`);
+      } catch (e) { log('ERROR ' + e.message + '\n' + e.stack); }
+    },
+  });
+
+  // ?matrix=1 : wear every catalog item that has a 3D slot, then a set of tricky swap sequences.
+  // After each change: settle the cloth and check slot consistency + cloth penetration.
+  async function runMatrix() {
+    const out = [], fails = [];
+    const S = AvatarStudio._state;
+    const check = (label) => {
+      AvatarStudio.settle(0.6);
+      const worn = AvatarStudio.wornItems();
+      const slots = worn.map((w) => w.slot);
+      const pen = AvatarStudio.clothPenetration();
+      const problems = [];
+      if (pen > 0) problems.push(`cloth inside body: ${pen}`);
+      if (slots.includes('dress') && (slots.includes('top') || slots.includes('bottom'))) problems.push('dress + top/bottom');
+      if (slots.includes('bag') && slots.includes('backpack')) problems.push('two bags');
+      if (new Set(slots).size !== slots.length) problems.push('duplicate slot');
+      const wantsCloth = slots.includes('dress') || worn.some((w) => /skirt/i.test(w.article_type + w.name) && w.slot === 'bottom')
+        || worn.some((w) => w.slot === 'top' && /kurta|kurti|tunic/i.test(w.article_type + w.name));
+      if (wantsCloth !== !!S.cloth) problems.push(`cloth expected=${wantsCloth} present=${!!S.cloth}`);
+      if (problems.length) fails.push(`${label}: ${problems.join('; ')}`);
+      return problems.length === 0;
+    };
+    try {
+      const items = await (await fetch('/api/clothing')).json();
+      const wearable = items.filter((it) => AvatarStudio.slotFor(it));
+      const skipped = items.filter((it) => !AvatarStudio.slotFor(it)).map((it) => it.article_type || it.category);
+      for (const it of wearable) { AvatarStudio.resetOutfit(true); AvatarStudio.applyItem(it); check(`${it.slotFor || ''}${it.name}`); }
+      const pick = (re, cat) => wearable.find((it) => (!cat || it.category === cat) && re.test(`${it.article_type} ${it.name}`));
+      const seqs = [
+        ['dress then top', [pick(/dress/i, 'dresses'), pick(/shirt/i, 'tops')]],
+        ['dress then trousers', [pick(/dress/i, 'dresses'), pick(/trouser|jean/i, 'bottoms')]],
+        ['top+skirt then dress', [pick(/tshirt|tops/i, 'tops'), pick(/skirt/i, 'bottoms'), pick(/dress/i, 'dresses')]],
+        ['kurta + skirt', [pick(/kurta/i, 'tops'), pick(/skirt/i, 'bottoms')]],
+        ['kurta then shirt', [pick(/kurta/i, 'tops'), pick(/shirt/i, 'tops')]],
+        ['jacket over dress', [pick(/dress/i, 'dresses'), pick(/jacket|blazer/i, 'outerwear')]],
+        ['full look', [pick(/shirt/i, 'tops'), pick(/jacket|blazer/i, 'outerwear'), pick(/jean|trouser/i, 'bottoms'),
+          pick(/shoe/i, 'footwear'), pick(/belt/i), pick(/watch/i), pick(/sunglass/i), pick(/\bcaps?\b/i, 'accessories')]],
+        ['bag then backpack', [pick(/handbag/i), pick(/backpack/i)]],
+        ['skirt then shorts', [pick(/skirt/i, 'bottoms'), pick(/short/i, 'bottoms')]],
+      ];
+      for (const [name, seq] of seqs) {
+        AvatarStudio.resetOutfit(true);
+        const list = seq.filter(Boolean);
+        list.forEach((it, i) => { AvatarStudio.applyItem(it); check(`${name} step ${i + 1} (${it.name})`); });
+        out.push(`${name}: ${AvatarStudio.wornItems().map((w) => w.slot).join(',')}  [applied ${list.length}/${seq.length}]`);
+      }
+      // body changes with cloth on: child body, then broad adult
+      AvatarStudio.resetOutfit(true); AvatarStudio.applyItem(pick(/dress/i, 'dresses'));
+      AvatarStudio.setMeasurements({ height_cm: 112, shoulder_cm: 28.4, chest_cm: 56.7, waist_cm: 47.5, hip_cm: 46.4 }, { age: 6 });
+      check('child body + dress');
+      AvatarStudio.setPhysique('muscular'); check('broad body + dress');
+      AvatarStudio.setWind(1.2); AvatarStudio.settle(2); check('broad body + dress + wind');
+      log(`MATRIX: ${wearable.length} items worn individually, ${seqs.length} sequences, ${fails.length} failures`);
+      log(`no 3D preview (by design): ${[...new Set(skipped)].join(', ') || 'none'}`);
+      out.forEach((o) => log('  ' + o));
+      fails.slice(0, 25).forEach((f) => log('FAIL ' + f));
+      document.getElementById('log').style.color = fails.length ? '#fca5a5' : '#86efac';
+      document.title = fails.length ? 'MATRIX FAIL' : 'MATRIX OK';
+    } catch (e) { log('ERROR ' + e.message + '\n' + e.stack); }
+  }
+</script>
+</body>
+</html>

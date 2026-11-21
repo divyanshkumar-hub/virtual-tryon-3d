@@ -17,7 +17,9 @@ import threading
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
+
+from face_analyzer import analyze_face
 
 try:
     import cv2  # type: ignore
@@ -167,9 +169,67 @@ def get_clothing_size(chest_cm: float, gender: str = "unisex") -> str:
         return "XXL"
 
 
+KIDS_SIZES = [  # (max height cm, label) - typical EU/UK kidswear by stature
+    (86, "12-18M"), (92, "18-24M"), (98, "2-3Y"), (104, "3-4Y"), (110, "4-5Y"), (116, "5-6Y"),
+    (122, "6-7Y"), (128, "7-8Y"), (134, "8-9Y"), (140, "9-10Y"), (146, "10-11Y"), (152, "11-12Y"),
+    (158, "12-13Y"), (164, "13-14Y"),
+]
+
+
+def get_kids_size(height_cm: float) -> str:
+    for max_h, label in KIDS_SIZES:
+        if height_cm <= max_h:
+            return label
+    return "14Y+"
+
+
+def is_child(age: Optional[float]) -> bool:
+    return age is not None and age < 14
+
+
+def measurement_confidence(method: str, measurements: Dict[str, Any], height_source: str = "user") -> Dict[str, Any]:
+    """Honest 0-100 confidence for the body measurements, with the reasons behind it."""
+    reasons = []
+    if method == "mediapipe_real":
+        vis = float(measurements.get("pose_visibility", 0.6))
+        score = 45 + 35 * vis
+        reasons.append(f"body landmarks found (visibility {vis:.0%})")
+        if measurements.get("full_body_visible"):
+            score += 10
+            reasons.append("whole body in frame")
+        else:
+            score -= 15
+            reasons.append("head or feet cut off - height scale is extrapolated")
+    elif method == "opencv_contour":
+        score = 30
+        reasons.append("no landmarks; rough silhouette only")
+    else:
+        score = 10
+        reasons.append("no person detected; values are population averages")
+    if height_source == "marker":
+        score += 10
+        reasons.append("scale from printed marker")
+    elif height_source == "estimated":
+        score -= 20
+        reasons.append("height not given - estimated from age/gender")
+    score = int(max(5, min(95, score)))
+    level = "high" if score >= 75 else "medium" if score >= 50 else "low"
+    return {"score": score, "level": level, "reasons": reasons}
+
+
 def get_recommendations(body_type: str, size: str) -> Tuple[List[str], List[str], List[str], str]:
     bt = body_type.lower()
-    if "inverted" in bt or "athletic" in bt:
+    if "child" in bt:
+        clothes = [
+            f"Soft Cotton Crew T-Shirt (Size {size})",
+            f"Pull-On Stretch Jeans (Size {size})",
+            f"Zip-Up Fleece Hoodie (Size {size})",
+            f"Easy-Fit Cargo Shorts (Size {size})",
+        ]
+        shoes = ["Velcro Canvas Sneakers", "Lightweight Running Shoes", "Summer Sandals"]
+        glasses = ["UV400 Kids Sunglasses", "Flexible Round Frames", "Sports Wrap Shades"]
+        face = "Round / Youthful"
+    elif "inverted" in bt or "athletic" in bt:
         clothes = [
             f"Navy Tailored Double-Breasted Blazer (Size {size})",
             f"Slim-Fit White Oxford Shirt (Size {size})",
@@ -346,13 +406,17 @@ def run_mediapipe_extraction(
 
     scale = user_height_cm / full_pixel_height
 
-    # Calibrated biacromial shoulder width
+    # Bounds are proportional to stature (not fixed adult cm) so children and
+    # petite/tall users are not forced into an adult range.
+    # Biacromial width is ~20-27% of stature, bi-iliac/hip width ~13-22%.
     sh_px = _pixel_dist(lm[L_SHOULDER], lm[R_SHOULDER], img_w, img_h)
-    shoulder_cm = round(max(34.0, min(56.0, sh_px * scale)), 1)
+    shoulder_cm = round(max(user_height_cm * 0.17, min(user_height_cm * 0.30, sh_px * scale)), 1)
 
-    # Bitrochanteric hip width
     hip_px = _pixel_dist(lm[L_HIP], lm[R_HIP], img_w, img_h)
-    hip_w_cm = round(max(24.0, min(48.0, hip_px * scale)), 1)
+    hip_w_cm = round(max(user_height_cm * 0.10, min(user_height_cm * 0.28, hip_px * scale)), 1)
+
+    key_ids = [NOSE, L_SHOULDER, R_SHOULDER, L_HIP, R_HIP, L_KNEE, R_KNEE, L_ANKLE, R_ANKLE]
+    visibility = float(np.mean([getattr(lm[i], "visibility", 0.5) or 0.0 for i in key_ids]))
 
     s_mid_x = (lm[L_SHOULDER].x + lm[R_SHOULDER].x) / 2
     s_mid_y = (lm[L_SHOULDER].y + lm[R_SHOULDER].y) / 2
@@ -394,6 +458,9 @@ def run_mediapipe_extraction(
         "height_cm": user_height_cm,
         "scale_factor": round(scale, 4),
         "landmarks_detected": True,
+        "pose_visibility": round(visibility, 3),
+        "_lm": lm,   # pose landmarks for the face crop; removed before the result is returned
+        "full_body_visible": bool(is_full_body),
         "image_width": img_w,
         "image_height": img_h,
     }
@@ -434,7 +501,7 @@ def run_opencv_contour_extraction(
             "hip_cm": hip_cm,
             "height_cm": user_height_cm,
             "scale_factor": round(scale, 4),
-            "landmarks_detected": True,
+            "landmarks_detected": False,  # silhouette box only, no body landmarks
             "method": "opencv_contour",
             "image_width": w,
             "image_height": h,
@@ -477,11 +544,15 @@ def run_fallback_extraction(
 def analyze_person_image(
     image_bytes: bytes,
     user_height_cm: float = 175.0,
-    gender: str = "unisex"
+    gender: str = "unisex",
+    age: Optional[float] = None,
+    height_source: str = "user",
+    face_box: Optional[Tuple[int, int, int, int]] = None,
 ) -> Dict[str, Any]:
     """
     Main entry point for computer vision body measurement and fashion analysis.
     Returns rich dictionary with body_type, measurements, size, and recommendations.
+    `age` (e.g. from the age service) switches children to kidswear sizing.
     """
     if not image_bytes or len(image_bytes) == 0:
         raise ValueError("Image bytes cannot be empty")
@@ -506,28 +577,54 @@ def analyze_person_image(
     waist = measurements.get("waist_cm", 79.0)
     hip = measurements.get("hip_cm", 94.0)
 
-    body_type = classify_body_type(shoulder, waist, hip)
-    size = get_clothing_size(chest, gender=gender)
+    if is_child(age):
+        body_type = "Child build"
+        size = get_kids_size(user_height_cm)
+    else:
+        body_type = classify_body_type(shoulder, waist, hip)
+        size = get_clothing_size(chest, gender=gender)
     clothes, shoes, glasses, face = get_recommendations(body_type, size)
+    pose_lm = measurements.pop("_lm", None)
 
-    # Sample color / skin tone
+    # Face shape + skin tone from face landmarks (face_analyzer.py); falls back to a fixed patch
     tone_rgb = (205.0, 160.0, 135.0)
+    face_info: Dict[str, Any] = {"face_detected": False, "face_shape": "Not detected"}
     try:
-        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        img = ImageOps.exif_transpose(Image.open(io.BytesIO(image_bytes))).convert("RGB")  # same orientation as the services
         w, h = img.size
-        cx, cy = w // 2, h // 4
-        patch = img.crop((max(0, cx - 15), max(0, cy - 15), min(w, cx + 15), min(h, cy + 15)))
-        arr = np.array(patch)
-        if arr.size > 0:
-            tone_rgb = tuple(arr.mean(axis=(0, 1)))
+        rgb = np.array(img)
+        if max(w, h) > 1600 and _HAS_CV2:     # keep landmarking fast on large photos
+            k = 1600 / max(w, h)
+            rgb = cv2.resize(rgb, (int(w * k), int(h * k)), interpolation=cv2.INTER_AREA)
+            face_box_scaled = [int(v * k) for v in face_box] if face_box else None
+        else:
+            face_box_scaled = face_box
+        face_info = analyze_face(rgb, face_box_scaled, pose_lm)
+        if face_info.get("face_detected") and face_info.get("cheek_rgb"):
+            tone_rgb = face_info["cheek_rgb"]
+        else:
+            if face_box:  # cheeks: middle of the lower half of the detected face
+                x0, y0, x1, y1 = face_box
+                cx, cy = (x0 + x1) // 2, y0 + int((y1 - y0) * 0.62)
+                r = max(4, (x1 - x0) // 8)
+            else:
+                cx, cy, r = w // 2, h // 4, 15
+            patch = img.crop((max(0, cx - r), max(0, cy - r), min(w, cx + r), min(h, cy + r)))
+            arr = np.array(patch)
+            if arr.size > 0:
+                tone_rgb = tuple(arr.mean(axis=(0, 1)))
     except Exception:
         pass
+    if face_info.get("face_detected"):
+        face = face_info["face_shape"]
+        glasses = [f"{style} sunglasses" for style in face_info.get("frame_advice", [])[:3]] or glasses
+    elif not is_child(age):
+        face = "Not detected"
 
     skin_tone, undertone = _classify_skin_tone(tone_rgb)
     recommended_colors = _recommend_palette(undertone)
 
-    fit_confidence = 97.4 if method == "mediapipe_real" else (91.0 if method == "opencv_contour" else 82.0)
-    ssim_score = 0.925 if method == "mediapipe_real" else (0.860 if method == "opencv_contour" else 0.760)
+    confidence = measurement_confidence(method, measurements, height_source)
 
     img_w = measurements.get("image_width", 384)
     img_h = measurements.get("image_height", 512)
@@ -539,11 +636,13 @@ def analyze_person_image(
         "image_height": img_h,
         "body_type": body_type,
         "face_shape": face,
+        "face_analysis": {k: v for k, v in face_info.items() if k != "cheek_rgb"},
         "skin_tone": skin_tone,
         "undertone": undertone,
         "clothing_size": size,
-        "fit_confidence": fit_confidence,
-        "ssim_score": ssim_score,
+        "size_system": "kids" if is_child(age) else "adult",
+        "fit_confidence": confidence["score"],
+        "measurement_confidence": confidence,
         "landmarks_detected": measurements.get("landmarks_detected", False),
         "body_measurements": {
             **measurements,
@@ -556,17 +655,20 @@ def analyze_person_image(
         "recommended_shoes": shoes,
         "recommended_sunglasses": glasses,
         "recommended_colors": recommended_colors,
-        "tryon_image_url": "/samples/4_vton_synthesis_result.jpg",
     }
 
 
 def analyze_image_bytes(
     image_bytes: bytes,
     user_height_cm: float = 175.0,
-    gender: str = "unisex"
+    gender: str = "unisex",
+    age: Optional[float] = None,
+    height_source: str = "user",
+    face_box: Optional[Tuple[int, int, int, int]] = None,
 ) -> Dict[str, Any]:
     """Compatibility wrapper for virtual_tryon_3d test suite."""
     if not image_bytes or len(image_bytes) == 0:
         raise ValueError("Image bytes cannot be empty")
 
-    return analyze_person_image(image_bytes, user_height_cm=user_height_cm, gender=gender)
+    return analyze_person_image(image_bytes, user_height_cm=user_height_cm, gender=gender,
+                                age=age, height_source=height_source, face_box=face_box)

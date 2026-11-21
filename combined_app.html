@@ -3,1153 +3,985 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Fashion Stylist & 3D Virtual Try-On Studio</title>
+  <title>StyleMate — AI Stylist &amp; 3D Try-On</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234f46e5'/%3E%3Cpath d='M22 14l10 6 10-6 10 8-6 8-4-2v22H22V28l-4 2-6-8z' fill='%23fff'/%3E%3C/svg%3E" />
   <!-- Three.js, OrbitControls, GLTFLoader — served locally (no internet needed) -->
   <script src="/web_app/js/three.min.js"></script>
   <script src="/web_app/js/OrbitControls.js"></script>
   <script src="/web_app/js/GLTFLoader.js"></script>
+  <script src="/static/js/avatar_studio.js"></script>
   <style>
+    :root {
+      --bg: #f7f3f0; --bg-2: #efe8e2; --card: #ffffff; --ink: #1d1d1f; --mute: #6b6560; --line: #e4dcd5;
+      --accent: #4f46e5; --accent-soft: #eef0ff; --ok: #047857; --ok-soft: #e6f6ef; --warn: #b45309;
+      --warn-soft: #fdf3e2; --bad: #b91c1c; --bad-soft: #fdecec; --dark: #121212;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, Arial, sans-serif; background: var(--bg); color: var(--ink); scroll-behavior: smooth; }
+    a { color: inherit; }
+    code { background: var(--bg-2); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
 
-    body {
-      font-family: 'Segoe UI', Arial, sans-serif;
-      background: #f7f3f0;
-      color: #222;
-      scroll-behavior: smooth;
-    }
-
-    /* ── Navbar ── */
-    .navbar {
-      background: #111;
-      color: white;
-      padding: 18px 7%;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
-    }
-    .navbar h1 { font-size: 22px; display: flex; align-items: center; gap: 10px; }
-    .status-badge {
-      font-size: 11px;
-      background: #10b981;
-      color: #fff;
-      padding: 4px 10px;
-      border-radius: 20px;
-      font-weight: 700;
-      letter-spacing: 0.3px;
-    }
+    /* navbar */
+    .navbar { background: var(--dark); color: #fff; padding: 14px 6%; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; gap: 16px; flex-wrap: wrap; }
+    .navbar h1 { font-size: 20px; display: flex; align-items: center; gap: 10px; }
+    .status-badge { font-size: 11px; background: #10b981; color: #fff; padding: 3px 10px; border-radius: 20px; font-weight: 700; }
     .status-badge.offline { background: #ef4444; }
-    .nav-links { display: flex; gap: 26px; align-items: center; }
-    .nav-links a { color: #ccc; text-decoration: none; font-size: 14px; }
+    .nav-links { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+    .nav-links a { color: #cfcfcf; text-decoration: none; font-size: 14px; }
     .nav-links a:hover { color: #fff; }
-    .studio-btn {
-      background: #6366f1;
-      color: white;
-      padding: 8px 16px;
-      border-radius: 6px;
-      font-size: 13px;
-      text-decoration: none;
-      font-weight: 600;
-    }
 
-    /* ── Hero ── */
-    .hero {
-      min-height: 340px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 50px 10%;
-      background: linear-gradient(135deg, #e8ddd6 0%, #d8c8bc 100%);
-    }
-    .hero h2 { font-size: 44px; margin-bottom: 16px; }
-    .hero p { max-width: 640px; margin: 0 auto 26px; font-size: 18px; line-height: 1.65; color: #444; }
-    .hero-btns { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    /* service strip */
+    .svc-strip { background: #1c1c1e; color: #d4d4d8; padding: 7px 6%; display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; align-items: center; }
+    .svc { display: inline-flex; align-items: center; gap: 6px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #71717a; }
+    .svc.on .dot { background: #34d399; } .svc.off .dot { background: #f87171; }
+    .svc-strip .hint { margin-left: auto; color: #a1a1aa; }
 
-    /* ── Buttons ── */
-    button {
-      background: #222;
-      color: white;
-      border: none;
-      padding: 12px 26px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 15px;
-      transition: background 0.2s, transform 0.1s;
-    }
-    button:hover { background: #444; transform: translateY(-1px); }
-    button:active { transform: translateY(0); }
-    button:disabled { background: #999; cursor: not-allowed; transform: none; }
+    /* layout */
+    section.block { padding: 48px 6%; }
+    .block h2 { font-size: 28px; margin-bottom: 6px; }
+    .lead { color: var(--mute); margin-bottom: 22px; font-size: 15px; }
+    .card { background: var(--card); border-radius: 14px; padding: 22px; box-shadow: 0 4px 18px rgba(0,0,0,.06); }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 20px; }
+    @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
 
-    /* ── Connection Banner ── */
-    #connection-banner {
-      display: none;
-      padding: 10px 7%;
-      font-size: 13px;
-      font-weight: 600;
-      text-align: center;
-    }
-    #connection-banner.online { background: #d1fae5; color: #065f46; display: block; }
-    #connection-banner.offline { background: #fee2e2; color: #991b1b; display: block; }
+    /* buttons & inputs */
+    button { background: #222; color: #fff; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; transition: background .15s, transform .1s; }
+    button:hover { background: #3a3a3a; }
+    button:disabled { background: #a8a29e; cursor: not-allowed; }
+    button.primary { background: var(--accent); } button.primary:hover { background: #4338ca; }
+    button.ghost { background: var(--bg-2); color: var(--ink); } button.ghost:hover { background: #e2d8cf; }
+    button.small { padding: 6px 11px; font-size: 12px; border-radius: 7px; }
+    input, select { padding: 9px 11px; border: 1px solid #d6cfc8; border-radius: 8px; font-size: 14px; background: #fff; color: var(--ink); }
+    label.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--mute); }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+    .hero { padding: 54px 6%; text-align: center; background: linear-gradient(135deg, #e8ddd6, #d8c8bc); }
+    .hero h2 { font-size: 40px; margin-bottom: 12px; }
+    .hero p { max-width: 680px; margin: 0 auto 22px; font-size: 17px; line-height: 1.6; color: #444; }
+    .steps { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+    .step { background: rgba(255,255,255,.7); border-radius: 30px; padding: 6px 14px; font-size: 13px; font-weight: 600; }
 
-    /* ── Upload Section ── */
-    .upload-section { padding: 60px 7%; text-align: center; }
-    .upload-section h2 { font-size: 30px; margin-bottom: 8px; }
-    .upload-section > p { margin-bottom: 24px; color: #666; }
+    /* upload */
+    .drop { border: 2px dashed #cfc6be; border-radius: 12px; padding: 26px; text-align: center; cursor: pointer; background: #fcfaf8; transition: .15s; }
+    .drop:hover, .drop.dragover { border-color: var(--accent); background: var(--accent-soft); }
+    .drop input { display: none; }
+    .preview { display: none; margin: 14px auto 0; max-height: 300px; max-width: 100%; border-radius: 10px; }
+    .tips { font-size: 13px; color: var(--mute); line-height: 1.6; margin-top: 10px; }
+    .msg { margin-top: 10px; font-size: 13px; font-weight: 600; }
+    .msg.err { color: var(--bad); } .msg.ok { color: var(--ok); }
 
-    .upload-box {
-      max-width: 560px;
-      margin: auto;
-      background: white;
-      padding: 32px;
-      border-radius: 14px;
-      box-shadow: 0 5px 20px rgba(0,0,0,0.08);
-    }
+    /* analysis */
+    #results { display: none; background: var(--bg-2); }
+    #results.visible { display: block; }
+    .profile { display: flex; gap: 18px; align-items: flex-start; }
+    .profile img { width: 120px; height: 160px; object-fit: cover; border-radius: 10px; background: #ddd; flex-shrink: 0; }
+    .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 14px; }
+    .kv dt { color: var(--mute); } .kv dd { font-weight: 600; }
+    .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; background: var(--bg-2); color: var(--mute); margin-left: 6px; vertical-align: middle; }
+    .tag.ok { background: var(--ok-soft); color: var(--ok); } .tag.warn { background: var(--warn-soft); color: var(--warn); } .tag.bad { background: var(--bad-soft); color: var(--bad); } .tag.ai { background: var(--accent-soft); color: var(--accent); }
+    .swatches { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+    .swatch { font-size: 11px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); }
+    .meter { height: 10px; background: var(--bg-2); border-radius: 6px; overflow: hidden; margin: 8px 0; }
+    .meter > i { display: block; height: 100%; border-radius: 6px; }
+    table.meas { width: 100%; border-collapse: collapse; font-size: 14px; }
+    table.meas td { padding: 6px 4px; border-bottom: 1px solid var(--line); } table.meas td:last-child { text-align: right; font-weight: 600; }
+    ul.notes { margin: 10px 0 0 18px; font-size: 13px; color: var(--warn); line-height: 1.5; }
+    ul.reasons { margin: 6px 0 0 18px; font-size: 13px; color: var(--mute); line-height: 1.5; }
 
-    .user-row {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: center;
-      margin-bottom: 10px;
-    }
-    .user-row input {
-      padding: 10px 12px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      font-size: 14px;
-      flex: 1;
-      min-width: 160px;
-    }
+    /* catalog cards */
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 4px 0 18px; }
+    .chip { background: #fff; color: var(--ink); border: 1px solid #d6cfc8; padding: 6px 13px; font-size: 13px; border-radius: 20px; }
+    .chip:hover, .chip.active { background: var(--dark); color: #fff; border-color: var(--dark); }
+    .cat-title { font-size: 15px; text-transform: capitalize; margin: 18px 0 10px; display: flex; align-items: center; gap: 8px; }
+    .products { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; }
+    .product { background: #fff; border-radius: 12px; padding: 10px; border: 2px solid transparent; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 2px 10px rgba(0,0,0,.05); }
+    .product.selected { border-color: var(--ok); }
+    .product .img { height: 150px; background: #fff; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+    .product img { max-height: 150px; max-width: 100%; object-fit: contain; image-rendering: auto; }
+    .product .name { font-size: 13px; font-weight: 600; line-height: 1.3; min-height: 34px; }
+    .product .meta { font-size: 11.5px; color: var(--mute); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .product .why { font-size: 11px; color: var(--accent); min-height: 14px; }
+    .product .price { font-size: 14px; font-weight: 700; }
+    .product .price .demo { font-size: 10px; font-weight: 600; color: var(--mute); background: var(--bg-2); padding: 1px 6px; border-radius: 10px; }
+    .product .price .brand { font-size: 11px; font-weight: 600; color: var(--mute); }
+    .product .size { font-size: 11.5px; color: var(--mute); }
+    .product .size.ok { color: var(--ok); } .product .size.bad { color: var(--bad); }
+    .product .acts { display: flex; gap: 5px; flex-wrap: wrap; margin-top: auto; }
+    .product .acts button { padding: 5px 8px; font-size: 11.5px; }
+    .colour-dot { width: 11px; height: 11px; border-radius: 50%; border: 1px solid rgba(0,0,0,.15); display: inline-block; }
+    .heart { background: #fff; color: #be123c; border: 1px solid #fecdd3; } .heart.on { background: #be123c; color: #fff; }
+    .heart:hover { background: #ffe4e6; color: #be123c; }
+    #explore { display: none; margin-top: 22px; } #explore.visible { display: block; }
 
-    .file-drop-zone {
-      border: 2px dashed #ccc;
-      border-radius: 10px;
-      padding: 28px 20px;
-      cursor: pointer;
-      margin-bottom: 18px;
-      transition: border-color 0.2s, background 0.2s;
-      background: #fafafa;
-    }
-    .file-drop-zone:hover, .file-drop-zone.dragover {
-      border-color: #6366f1;
-      background: #eef2ff;
-    }
-    .file-drop-zone input[type="file"] {
-      display: none;
-    }
-    .drop-label { font-size: 14px; color: #666; margin-top: 8px; }
+    /* outfit + saved */
+    .outfit-bar { position: sticky; bottom: 0; z-index: 50; background: var(--dark); color: #fff; padding: 10px 6%; display: none; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .outfit-bar.visible { display: flex; }
+    .outfit-bar img { width: 38px; height: 46px; object-fit: contain; background: #fff; border-radius: 6px; }
+    .outfit-bar .items { display: flex; gap: 6px; flex: 1; overflow-x: auto; }
+    .saved { display: flex; flex-direction: column; gap: 8px; }
+    .saved-item { display: flex; gap: 10px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: #fcfaf8; font-size: 13px; }
+    .saved-item img { width: 36px; height: 44px; object-fit: contain; background: #fff; border-radius: 6px; }
+    .saved-item span { flex: 1; }
 
-    .preview img {
-      width: 220px;
-      max-height: 300px;
-      object-fit: contain;
-      display: block;
-      margin: 0 auto 18px;
-      border-radius: 10px;
-      border: 2px solid #eee;
-    }
-    .error { color: #d00000; margin-top: 14px; font-size: 14px; }
-    .sample-btn { background: #ece7e2; color: #222; font-size: 13px; padding: 8px 14px; }
-    .sample-btn:hover { background: #ddd4cc; }
-    .btn-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    /* clothing upload */
+    .bars { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+    .bar { display: grid; grid-template-columns: 120px 1fr 46px; gap: 8px; align-items: center; font-size: 13px; }
+    .bar .meter { margin: 0; height: 8px; } .bar .meter > i { background: var(--accent); }
+    .bar b { font-weight: 600; text-transform: capitalize; } .bar span { text-align: right; color: var(--mute); font-variant-numeric: tabular-nums; }
+    .engine { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: #fcfaf8; }
+    .engine h4 { font-size: 13px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .engine.off { color: var(--mute); }
+    .cloth-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+    .cloth-form .wide { grid-column: 1 / -1; }
+    .cloth-form input, .cloth-form select { width: 100%; }
+    .colour-row { display: flex; gap: 6px; } .colour-row input[type=color] { width: 46px; padding: 2px; height: 38px; flex: none; }
+    .notice { font-size: 13px; padding: 8px 10px; border-radius: 8px; margin-top: 10px; }
+    .notice.warn { background: var(--warn-soft); color: var(--warn); } .notice.ok { background: var(--ok-soft); color: var(--ok); }
+    @media (max-width: 560px) { .cloth-form { grid-template-columns: 1fr; } .bar { grid-template-columns: 96px 1fr 42px; } }
 
-    /* ── Results Section ── */
-    .results {
-      padding: 60px 7%;
-      display: none;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 22px;
-      background: #f0ebe7;
-    }
-    .results.visible { display: grid; }
-    .results > h2 { grid-column: 1 / -1; text-align: center; font-size: 30px; margin-bottom: 8px; }
-    .results > .results-sub { grid-column: 1 / -1; text-align: center; color: #666; font-size: 14px; margin-bottom: 6px; }
+    /* 3D studio */
+    #three-container { width: 100%; height: 620px; background: radial-gradient(circle at 50% 35%, #26334d 0%, #0f172a 70%, #070b14 100%); border-radius: 14px; position: relative; overflow: hidden; }
+    .cam-controls { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; background: rgba(15,23,42,.85); padding: 6px 8px; border-radius: 10px; z-index: 10; flex-wrap: wrap; justify-content: center; }
+    .cam-btn { background: rgba(255,255,255,.1); color: #fff; font-size: 12px; padding: 6px 11px; border-radius: 6px; }
+    .cam-btn:hover, .cam-btn.active { background: var(--accent); }
+    #outfit-status-label { font-weight: 600; margin: 12px 0 6px; color: #333; font-size: 14px; text-align: center; }
+    .quick { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; margin: 8px 0; }
+    .row-label { font-size: 11px; font-weight: 700; color: #555; align-self: center; text-transform: uppercase; letter-spacing: .5px; }
+    .spinner { width: 28px; height: 28px; border: 3px solid #ddd; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-    .result-card {
-      background: white;
-      padding: 26px;
-      border-radius: 14px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.06);
-    }
-    .result-card h3 { margin-bottom: 14px; font-size: 18px; }
-    .result-card p { margin: 8px 0; font-size: 15px; }
-
-    .recommendation-list { display: flex; flex-direction: column; gap: 9px; }
-    .recommendation {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 11px 14px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      background: #fafafa;
-      transition: all 0.15s;
-    }
-    .recommendation.selected { border: 2px solid #10b981; background: #ecfdf5; }
-    .recommendation button { padding: 6px 13px; font-size: 12px; }
-    .recommendation.selected button { background: #10b981; }
-
-    .selected-outfit {
-      grid-column: 1 / -1;
-      background: white;
-      padding: 24px;
-      border-radius: 14px;
-      text-align: center;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-      border: 2px solid #222;
-    }
-    .selected-outfit h3 { margin-bottom: 10px; }
-    .selected-outfit p { margin: 7px 0; font-size: 15px; }
-    .outfit-action-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
-
-    /* ── Saved Outfits ── */
-    .saved-outfit-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 11px 14px;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      background: #f9fafb;
-      gap: 10px;
-    }
-    .saved-outfit-item .outfit-label { flex: 1; font-size: 14px; }
-    .saved-outfit-item button { padding: 5px 12px; font-size: 12px; background: #4f46e5; }
-    .saved-outfit-item .del-btn { background: #ef4444; margin-left: 4px; }
-
-    /* ── 3D Try-On Section ── */
-    .try-on { padding: 60px 7%; text-align: center; }
-    .try-on h2 { font-size: 30px; margin-bottom: 20px; }
-    .avatar-box {
-      max-width: 940px;
-      margin: auto;
-      background: white;
-      border-radius: 16px;
-      padding: 28px;
-      box-shadow: 0 5px 25px rgba(0,0,0,0.1);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    #three-container {
-      width: 100%;
-      height: 540px;
-      background: radial-gradient(circle at 50% 35%, #26334d 0%, #0f172a 70%, #070b14 100%);
-      border-radius: 14px;
-      position: relative;
-      overflow: hidden;
-      margin-bottom: 18px;
-      box-shadow: inset 0 0 40px rgba(0,0,0,0.5);
-    }
-    .cam-controls {
-      position: absolute;
-      bottom: 14px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 8px;
-      background: rgba(15,23,42,0.85);
-      padding: 6px 10px;
-      border-radius: 10px;
-      backdrop-filter: blur(8px);
-      z-index: 10;
-    }
-    .cam-btn {
-      background: rgba(255,255,255,0.1);
-      color: #fff;
-      font-size: 12px;
-      padding: 6px 12px;
-      border-radius: 6px;
-    }
-    .cam-btn:hover, .cam-btn.active { background: #6366f1; transform: none; }
-
-    .quick-tryon-controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 9px;
-      justify-content: center;
-      margin: 12px 0;
-      width: 100%;
-    }
-    .row-label {
-      font-size: 11px;
-      font-weight: 700;
-      color: #555;
-      align-self: center;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      white-space: nowrap;
-    }
-    .quick-chip {
-      background: #f3f4f6;
-      color: #1f2937;
-      border: 1px solid #d1d5db;
-      padding: 7px 13px;
-      font-size: 12px;
-      border-radius: 20px;
-    }
-    .quick-chip:hover, .quick-chip.active {
-      background: #222;
-      color: #fff;
-      border-color: #222;
-      transform: none;
-    }
-    #outfit-status-label { font-weight: 600; margin-bottom: 8px; color: #333; font-size: 14px; }
-
-    /* ── About & Footer ── */
-    .about { padding: 60px 7%; text-align: center; background: #e8ddd6; }
-    .about h2 { font-size: 28px; margin-bottom: 14px; }
-    .about p { max-width: 720px; margin: auto; line-height: 1.75; }
-    .about .tech-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 22px; }
-    .tech-pill {
-      background: #fff;
-      border: 1px solid #ddd;
-      padding: 6px 14px;
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: 600;
-    }
-
-    footer { background: #111; color: #aaa; text-align: center; padding: 24px; font-size: 13px; }
-    footer strong { color: #fff; }
-
-    @media (max-width: 750px) {
-      .results { grid-template-columns: 1fr; }
-      .hero h2 { font-size: 32px; }
-    }
+    .studio { display: grid; grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr); gap: 20px; align-items: start; }
+    @media (max-width: 900px) { .studio { grid-template-columns: 1fr; } }
+    .studio-side { display: flex; flex-direction: column; gap: 16px; }
+    .worn-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+    .worn { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 10px; background: #fcfaf8; font-size: 13px; }
+    .worn img { width: 34px; height: 42px; object-fit: contain; background: #fff; border-radius: 6px; }
+    .worn .slot { font-size: 11px; color: var(--mute); text-transform: uppercase; letter-spacing: .4px; }
+    .worn span.n { flex: 1; }
+    .worn button { padding: 3px 9px; font-size: 12px; }
+    .fit-panel { padding: 16px; }
+    .fit-regions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .fit-region { font-size: 12px; padding: 6px 10px; border-radius: 8px; background: #fff; border: 1px solid var(--line); }
+    .fit-region b { text-transform: capitalize; }
+    .v-tight { color: #b91c1c; } .v-snug { color: #b45309; } .v-good { color: #047857; } .v-relaxed { color: #0369a1; } .v-loose { color: #4338ca; }
+    .about { background: #e8ddd6; text-align: center; }
+    .about p { max-width: 760px; margin: auto; line-height: 1.7; }
+    .tech-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 18px; }
+    .tech-pill { background: #fff; border: 1px solid #ddd; padding: 5px 12px; border-radius: 20px; font-size: 12.5px; font-weight: 600; }
+    footer { background: var(--dark); color: #aaa; text-align: center; padding: 22px; font-size: 13px; }
   </style>
 </head>
 <body>
-<div class="app">
 
-  <!-- ══ Navbar ══ -->
-  <nav class="navbar">
-    <h1>
-      👗 AI Fashion Stylist
-      <span class="status-badge" id="api-badge">● Connecting...</span>
-    </h1>
-    <div class="nav-links">
-      <a href="#home">Home</a>
-      <a href="#upload">AI Analyze</a>
-      <a href="#tryon-section">3D Try-On</a>
-      <a href="#about">About</a>
-      <a href="#tryon-section" class="studio-btn">🧍 3D Studio</a>
+<nav class="navbar">
+  <h1>👗 StyleMate <span class="status-badge" id="api-badge">● Connecting…</span></h1>
+  <div class="nav-links">
+    <a href="#upload">1 · Analyze</a>
+    <a href="#results">2 · Your profile</a>
+    <a href="#shop">3 · Recommendations</a>
+    <a href="#wardrobe">4 · Add clothes</a>
+    <a href="#tryon-section">5 · 3D try-on</a>
+    <a href="#about">About</a>
+  </div>
+</nav>
+<div class="svc-strip" id="svc-strip"><span>AI services:</span><span class="hint">checking…</span></div>
+
+<section class="hero" id="home">
+  <h2>Find clothes that fit you</h2>
+  <p>Upload a full-body photo. StyleMate works out your age, measurements and size, picks items from the catalog that suit your colouring and build, and lets you try them on a 3D avatar shaped like you.</p>
+  <a href="#upload"><button class="primary">Get started</button></a>
+  <div class="steps"><span class="step">📸 Photo</span><span class="step">📏 Size &amp; measurements</span><span class="step">🛍️ Matched catalog</span><span class="step">👕 Add your clothes</span><span class="step">🧍 3D try-on &amp; fit map</span></div>
+</section>
+
+<!-- ═════════ 1. upload ═════════ -->
+<section id="upload" class="block">
+  <h2>1. Your photo</h2>
+  <p class="lead">Stand straight, facing the camera, with your whole body (head to feet) in the frame.</p>
+  <div class="grid-2">
+    <div class="card">
+      <div class="drop" id="drop-zone">
+        <div style="font-size:34px;">📸</div>
+        <div style="margin-top:6px;">Click to choose a photo, or drag &amp; drop it here</div>
+        <div style="font-size:12px;color:#999;margin-top:4px;">JPG, PNG or WEBP · max 10 MB</div>
+        <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" />
+      </div>
+      <img id="preview-img" class="preview" alt="Your photo" />
     </div>
-  </nav>
-
-  <!-- ══ Connection Banner ══ -->
-  <div id="connection-banner"></div>
-
-  <!-- ══ Hero ══ -->
-  <section id="home" class="hero">
-    <div>
-      <h2>Find Your Perfect Style</h2>
-      <p>
-        Upload your full-body photo → AI detects your body type &amp; face shape →
-        get personalized outfit recommendations → try them live on a 3D human avatar!
+    <div class="card">
+      <div class="row" style="margin-bottom:12px;">
+        <label class="field">Height (cm)
+          <input type="number" id="height-input" min="60" max="230" placeholder="optional" style="width:120px;" /></label>
+        <label class="field">Gender
+          <select id="gender-input"><option value="">Auto-detect</option><option value="female">Female</option><option value="male">Male</option></select></label>
+        <label class="field">Printed marker side (cm)
+          <input type="number" id="marker-input" value="15" min="3" max="40" step="0.1" style="width:110px;" /></label>
+      </div>
+      <p class="tips">
+        <b>For the most accurate size:</b> enter your height, <i>or</i> print our
+        <a href="/static/marker/aruco_marker_15cm.pdf" target="_blank" rel="noopener">15 cm height marker (PDF)</a>
+        at 100% / actual size and hold it flat against your chest. If the printed side isn't exactly 15 cm, enter what you measured above.
+        Without either, the height is estimated from your detected age.
       </p>
-      <div class="hero-btns">
-        <a href="#upload"><button>🚀 Get Started</button></a>
-        <a href="#tryon-section"><button style="background:#6366f1;">🧍 Open 3D Studio</button></a>
+      <div class="row" style="margin-top:14px;">
+        <button class="primary" id="analyze-btn">Analyze my photo</button>
+        <button class="ghost" id="sample-btn">Use sample photo</button>
+      </div>
+      <p id="upload-msg" class="msg"></p>
+      <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
+      <div class="row">
+        <label class="field">Name <input type="text" id="user-name-input" value="StyleMate Demo User" /></label>
+        <label class="field">Email <input type="email" id="user-email-input" value="demo@stylemate.ai" /></label>
+        <button class="ghost small" id="user-btn">Save / switch user</button>
+      </div>
+      <p class="tips">Active user <b>#<span id="active-user-id">1</span></b>. Analyses and outfits are saved to <code>instance/stylemate.db</code>.</p>
+      <p id="user-msg" class="msg"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════ 2. results ═════════ -->
+<section id="results" class="block">
+  <h2>2. Your profile <span id="res-analysis-id" class="tag"></span></h2>
+  <p class="lead" id="res-engine"></p>
+  <div class="grid-3">
+    <div class="card">
+      <div class="profile">
+        <img id="res-photo" alt="" />
+        <dl class="kv">
+          <dt>Age</dt><dd id="res-age">–</dd>
+          <dt>Gender</dt><dd id="res-gender">–</dd>
+          <dt>Height</dt><dd id="res-height">–</dd>
+          <dt>Size</dt><dd id="res-size" style="color:var(--accent);font-size:18px;">–</dd>
+          <dt>Build</dt><dd id="res-body-type">–</dd>
+        </dl>
       </div>
     </div>
-  </section>
+    <div class="card">
+      <h3 style="font-size:16px;">Measurements</h3>
+      <table class="meas" id="res-measurements"></table>
+    </div>
+    <div class="card">
+      <h3 style="font-size:16px;">How reliable is this?</h3>
+      <div class="meter"><i id="conf-bar" style="width:0"></i></div>
+      <div id="conf-text" style="font-weight:700;"></div>
+      <ul class="reasons" id="conf-reasons"></ul>
+      <ul class="notes" id="res-notes"></ul>
+      <h3 style="font-size:16px;margin-top:14px;">Colouring</h3>
+      <div style="font-size:14px;"><span id="res-skin"></span></div>
+      <div class="swatches" id="res-palette"></div>
+      <h3 style="font-size:16px;margin-top:14px;">Face shape</h3>
+      <div style="font-size:14px;"><b id="res-face-shape">–</b> <span id="res-face-tag" class="tag"></span></div>
+      <div class="tips" id="res-frames" style="margin-top:4px;"></div>
+    </div>
+  </div>
+</section>
 
-  <!-- ══ Upload Section ══ -->
-  <section id="upload" class="upload-section">
-    <h2>1. User Profile &amp; Full-Body Upload</h2>
-    <p>Connected to StyleMate SQLite database (<code>instance/stylemate.db</code>)</p>
+<!-- ═════════ 3. recommendations ═════════ -->
+<section id="shop" class="block">
+  <h2>3. Recommended for you <span id="rec-engine" class="tag"></span></h2>
+  <p class="lead" id="shop-lead">Analyze a photo to get picks matched to your size, colouring and build. You can also browse and search the catalog now.</p>
+  <div class="toolbar" id="occasions"></div>
+  <div class="toolbar">
+    <input id="search-input" placeholder="Search the catalog, e.g. “navy formal shirt”, “summer sandals”" style="flex:1;min-width:240px;" />
+    <button id="search-btn">Search</button>
+  </div>
+  <div class="toolbar">
+    <label style="font-size:13px;display:flex;align-items:center;gap:6px;">Budget up to ₹
+      <input type="number" id="budget-input" min="0" step="100" placeholder="any" style="width:100px;"></label>
+    <label style="font-size:13px;"><input type="checkbox" id="mysize-input"> only items in stock in my size</label>
+    <span class="tip" style="font-size:12px;color:var(--mute);">♥ items you like to re-rank · prices are demo values</span>
+    <span id="filter-note" style="font-size:12px;color:var(--mute);"></span>
+  </div>
+  <div id="rec-groups"></div>
+  <div id="explore" class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 id="explore-title" style="font-size:16px;"></h3><button class="ghost small" id="explore-close">Close</button></div>
+    <div id="explore-body" style="margin-top:10px;"></div>
+  </div>
+  <div class="card" style="margin-top:24px;">
+    <h3 style="font-size:16px;margin-bottom:10px;">Saved outfits</h3>
+    <div class="saved" id="saved-outfits-list"><p style="color:#999;font-size:14px;">No outfits saved yet.</p></div>
+  </div>
+</section>
 
-    <!-- User profile card -->
-    <div class="upload-box" style="margin-bottom:20px; padding:22px;">
-      <h3 style="margin-bottom:12px; font-size:17px;">
-        👤 StyleMate User  <span style="color:#6366f1;">#<span id="active-user-id">1</span></span>
-      </h3>
-      <div class="user-row">
-        <input type="text" id="user-name-input" value="StyleMate Demo User" placeholder="Your Name" />
-        <input type="email" id="user-email-input" value="demo@stylemate.ai" placeholder="Your Email" />
-        <input type="number" id="user-height-input" value="175" min="140" max="220" placeholder="Height cm" style="width:120px;" title="Your real height for accurate AI measurements" />
-        <button onclick="registerOrSwitchUser()" style="padding:10px 16px;font-size:13px;">Save / Switch User</button>
+<!-- ═════════ 4. add your own clothes ═════════ -->
+<section id="wardrobe" class="block" style="background:var(--bg-2);">
+  <h2>4. Add your own clothes</h2>
+  <p class="lead">Photograph one garment, laid flat or on a hanger, against a plain background. Cloth analysis works out what it is,
+     its colour and fabric. Check the details, add it to the catalog, and it goes straight onto your 3D avatar.</p>
+  <div class="grid-2">
+    <div class="card">
+      <div class="drop" id="cloth-drop">
+        <div style="font-size:34px;">👕</div>
+        <div style="margin-top:6px;">Click to choose a garment photo, or drag &amp; drop it here</div>
+        <div style="font-size:12px;color:#999;margin-top:4px;">JPG, PNG or WEBP · max 10 MB · one garment per photo</div>
+        <input type="file" id="cloth-file" accept="image/jpeg,image/png,image/webp" />
       </div>
-      <p style="font-size:12px;color:#888;margin-top:5px;">📏 Enter your real height (cm) for accurate MediaPipe body measurements</p>
-      <p id="user-status-msg" style="margin-top:7px;font-size:13px;color:#059669;font-weight:600;display:none;"></p>
-    </div>
-
-    <!-- Upload box with drag-and-drop -->
-    <div class="upload-box">
-      <div class="file-drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
-        <div style="font-size:36px;">📸</div>
-        <div class="drop-label">Click to select image — or drag &amp; drop here</div>
-        <div class="drop-label" style="font-size:12px;color:#aaa;">JPG, JPEG, PNG · Max 10MB</div>
-        <input type="file" id="file-input" accept="image/jpeg,image/jpg,image/png" onchange="handleFileChange(event)" />
+      <img id="cloth-preview" class="preview" alt="Your garment" />
+      <div class="row" style="margin-top:14px;">
+        <button class="primary" id="cloth-analyze-btn">Analyze garment</button>
+        <button class="ghost" id="cloth-sample-btn">Use sample garment</button>
       </div>
-
-      <div id="preview-box" class="preview" style="display:none;">
-        <img id="preview-img" src="" alt="Uploaded preview" />
-      </div>
-
-      <div class="btn-row">
-        <button id="analyze-btn" onclick="analyzeImage()">📤 Upload &amp; Analyze Image</button>
-        <button class="sample-btn" onclick="useSamplePhoto()">🖼️ Use Sample Photo</button>
-      </div>
-      <p id="error-msg" class="error" style="display:none;"></p>
+      <p id="cloth-msg" class="msg"></p>
     </div>
-  </section>
-
-  <!-- ══ AI Analysis & Recommendations ══ -->
-  <section id="results-section" class="results">
-    <h2>Your AI Fashion Analysis <span id="res-analysis-id" style="font-size:17px;color:#059669;"></span></h2>
-    <p class="results-sub">Results are saved in <code>instance/stylemate.db</code> → <code>analysis</code> table</p>
-
-    <div class="result-card">
-      <h3>🧍 Body Measurements</h3>
-      <p><strong>Body Type:</strong> <span id="res-body-type">-</span></p>
-      <p><strong>Clothing Size:</strong> <span id="res-size" style="color:#6366f1;font-weight:700;">-</span></p>
-      <p><strong>Measurements:</strong> <span id="res-measurements">—</span></p>
-      <p><strong>Extra:</strong> <span id="res-extra">—</span></p>
-      <p id="res-method-badge" style="font-size:12px;margin-top:6px;"></p>
-    </div>
-
-    <div class="result-card">
-      <h3>😊 Face Analysis</h3>
-      <p><strong>Face Shape:</strong> <span id="res-face-shape">-</span></p>
-      <p><strong>Recommended Frame:</strong> Geometric / Aviator</p>
-      <p><strong>AI Fit Confidence:</strong> <span id="res-confidence">-</span></p>
-      <p style="font-size:13px;color:#059669;"><strong>DB:</strong> Stored in <code>analysis</code> table ✓</p>
-    </div>
-
-    <div class="result-card">
-      <h3>👕 Recommended Clothes</h3>
-      <div id="clothes-list" class="recommendation-list"></div>
-      <h3 style="margin-top:20px;">👟 Recommended Shoes</h3>
-      <div id="shoes-list" class="recommendation-list"></div>
-    </div>
-
-    <div class="result-card">
-      <h3>🕶️ Recommended Sunglasses &amp; Accessories</h3>
-      <div id="sunglasses-list" class="recommendation-list"></div>
-    </div>
-
-    <div class="selected-outfit">
-      <h3>Selected Outfit for 3D Try-On</h3>
-      <p><strong>Clothes &amp; Shoes:</strong> <span id="selected-clothes-text">None selected</span></p>
-      <p><strong>Sunglasses:</strong> <span id="selected-glasses-text">None selected</span></p>
-      <div class="outfit-action-row">
-        <button onclick="applySelectedOutfitTo3D()" style="background:#4f46e5;">
-          👗 Try on 3D Avatar ↓
-        </button>
-        <button onclick="saveOutfitToSQLite()" style="background:#059669;">
-          💾 Save Outfit to DB
-        </button>
-      </div>
-      <p id="save-outfit-msg" style="margin-top:10px;color:#059669;font-weight:600;display:none;"></p>
-    </div>
-
-    <div class="result-card" style="grid-column: 1 / -1;">
-      <h3>🗄️ Your Saved Outfits <span style="font-size:13px;font-weight:400;color:#666;">(saved_outfit table)</span></h3>
-      <div id="saved-outfits-list" class="recommendation-list" style="margin-top:12px;">
-        <p style="color:#999;font-size:14px;">No outfits saved yet.</p>
+    <div class="card" id="cloth-result">
+      <h3 style="font-size:16px;">Cloth analysis</h3>
+      <p class="tips" id="cloth-empty">Choose a garment photo and press “Analyze garment”. The results and an editable catalog entry appear here.</p>
+      <div id="cloth-body" style="display:none;">
+        <div class="grid-2" style="gap:10px;margin-top:10px;">
+          <div class="engine" id="cloth-vf"></div>
+          <div class="engine" id="cloth-fc"></div>
+        </div>
+        <div id="cloth-verdict"></div>
+        <div class="cloth-form">
+          <label class="field wide">Name <input type="text" id="cf-name" maxlength="200" /></label>
+          <label class="field">Type <select id="cf-type"></select></label>
+          <label class="field">Colour
+            <span class="colour-row"><input type="color" id="cf-color" title="Detected from the photo. Click to change." /><input type="text" id="cf-colour-name" maxlength="40" placeholder="e.g. Navy Blue" /></span></label>
+          <label class="field">Fabric <select id="cf-fabric"></select></label>
+          <label class="field">Style
+            <select id="cf-usage"><option>Casual</option><option>Formal</option><option>Party</option><option>Sports</option><option>Ethnic</option><option>Streetwear</option></select></label>
+          <label class="field">For
+            <select id="cf-audience"><option value="unisex">Everyone</option><option value="women">Women</option><option value="men">Men</option><option value="girls">Girls</option><option value="boys">Boys</option></select></label>
+          <label class="field">Price ₹ <input type="number" id="cf-price" min="0" step="1" placeholder="optional" /></label>
+        </div>
+        <div class="row" style="margin-top:14px;">
+          <button class="primary" id="cloth-add-btn">Add to catalog &amp; wear in 3D</button>
+        </div>
+        <p id="cloth-add-msg" class="msg"></p>
       </div>
     </div>
-  </section>
+  </div>
+  <div style="margin-top:24px;">
+    <div class="cat-title">My uploaded clothes <span class="tag" id="my-uploads-count"></span></div>
+    <div id="my-uploads"><p class="tips">Nothing uploaded yet.</p></div>
+  </div>
+</section>
 
-  <!-- ══ 3D Virtual Try-On Studio ══ -->
-  <section id="tryon-section" class="try-on">
-    <h2>🧍 3D Virtual Try-On Studio</h2>
-
-    <div class="avatar-box">
+<!-- ═════════ 5. 3D try-on ═════════ -->
+<section id="tryon-section" class="block">
+  <h2>5. Try it on in 3D</h2>
+  <p class="lead">Press “Wear in 3D” on any item. The avatar takes your proportions, garments keep their colour and fabric
+     finish, skirts and dresses are simulated cloth, and the fit map shows where a size is tight or loose on you.</p>
+  <div class="studio">
+    <div class="card" style="padding:14px;">
       <div id="three-container">
         <div class="cam-controls">
-          <button class="cam-btn active" id="cam-full" onclick="setCameraView('full')">Full Body</button>
-          <button class="cam-btn" id="cam-upper" onclick="setCameraView('upper')">Upper Body</button>
-          <button class="cam-btn" id="cam-face" onclick="setCameraView('face')">Face &amp; Hair</button>
-          <button class="cam-btn" id="spin-btn" onclick="toggleSpin()">▶ Auto 360°</button>
+          <button class="cam-btn active" id="cam-full">Full body</button>
+          <button class="cam-btn" id="cam-upper">Upper body</button>
+          <button class="cam-btn" id="cam-face">Face</button>
+          <button class="cam-btn" id="spin-btn">▶ Auto 360°</button>
         </div>
       </div>
-
-      <p id="outfit-status-label">
-        🧍 Realistic 3D Human Model — drag to rotate, scroll to zoom!
-      </p>
-
-        <!-- Physique controls -->
-        <div class="quick-tryon-controls" style="border-bottom:1px solid #eee;padding-bottom:12px;">
-          <span class="row-label">Physique &amp; Skin:</span>
-          <button class="quick-chip active" id="phys-athletic" onclick="setPhysique('athletic')">💪 Athletic</button>
-          <button class="quick-chip" id="phys-muscular" onclick="setPhysique('muscular')">🏋️ Muscular</button>
-          <button class="quick-chip" id="phys-slim" onclick="setPhysique('slim')">🏃 Slim</button>
-          <button class="quick-chip" id="phys-custom" onclick="applyCustomMeasurements()" style="display:none;background:#6366f1;color:#fff;border-color:#6366f1;">🎯 My Measured Body</button>
-          <button class="quick-chip" id="phys-shirtless" onclick="toggleShirtless()">🧍 Shirtless</button>
-          <button class="quick-chip" onclick="cycleSkinTone()">🎨 Skin Tone</button>
+      <p id="outfit-status-label">🧍 Drag to rotate, scroll to zoom</p>
+    </div>
+    <div class="studio-side">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="font-size:16px;">Wearing</h3>
+          <button class="ghost small" id="reset-btn">Reset outfit</button>
         </div>
-
-      <!-- Garment quick-try chips -->
-      <div class="quick-tryon-controls">
-        <span class="row-label">Tops:</span>
-        <button class="quick-chip" onclick="quickTry('blazer')">🧥 Navy Blazer</button>
-        <button class="quick-chip" onclick="quickTry('hoodie')">🔴 Cyber Hoodie</button>
-        <button class="quick-chip" onclick="quickTry('oxford')">👔 White Oxford</button>
-        <button class="quick-chip" onclick="quickTry('leather')">🖤 Leather Jacket</button>
-        <button class="quick-chip" onclick="quickTry('tshirt')">👕 Athletic Tee</button>
+        <div id="worn-list" class="worn-list"><p class="tips">The base outfit. Add items from the recommendations or your uploaded clothes.</p></div>
       </div>
-      <div class="quick-tryon-controls">
-        <span class="row-label">Bottoms:</span>
-        <button class="quick-chip" onclick="quickTry('chinos')">👖 Tan Chinos</button>
-        <button class="quick-chip" onclick="quickTry('denim')">👖 Dark Denim</button>
-        <button class="quick-chip" onclick="quickTry('cargo')">🪖 Cargo Trousers</button>
+      <div id="fit-panel" class="card fit-panel" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <b id="fit-title" style="font-size:14px;"></b>
+          <label style="font-size:12px;">Size <select id="fit-size"></select></label>
+        </div>
+        <label style="font-size:12px;display:block;margin-top:6px;"><input type="checkbox" id="fit-heat" checked> show fit map on the avatar</label>
+        <div id="fit-summary" style="font-size:13px;margin:6px 0;"></div>
+        <div id="fit-regions" class="fit-regions"></div>
       </div>
-      <div class="quick-tryon-controls">
-        <span class="row-label">Accessories:</span>
-        <button class="quick-chip" onclick="quickTry('aviator')">🕶️ Gold Aviators</button>
-        <button class="quick-chip" onclick="quickTry('watch')">⌚ Chrono Watch</button>
-        <button class="quick-chip" onclick="quickTry('ai_texture')">✨ Map AI Texture</button>
-        <button class="quick-chip" onclick="resetAvatar()">🔄 Reset Avatar</button>
+      <div class="card">
+        <div class="quick" style="justify-content:flex-start;">
+          <span class="row-label">Body</span>
+          <button class="chip active" id="phys-athletic" data-phys="athletic">Average</button>
+          <button class="chip" id="phys-muscular" data-phys="muscular">Broad</button>
+          <button class="chip" id="phys-slim" data-phys="slim">Slim</button>
+          <button class="chip" id="phys-custom" style="display:none;">🎯 My measurements</button>
+          <button class="chip" id="skin-btn">Skin tone</button>
+        </div>
+        <div class="quick" style="justify-content:flex-start;">
+          <span class="row-label">Wind</span>
+          <input type="range" id="wind-input" min="0" max="1.2" step="0.05" value="0" style="width:160px;padding:0;">
+          <span class="tips" style="margin:0;">moves skirts, dresses &amp; hems</span>
+        </div>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- ══ About ══ -->
-  <section id="about" class="about">
-    <h2>About This Project</h2>
-    <p>
-      <strong>AI Fashion Stylist &amp; 3D Virtual Try-On Studio</strong> combines computer-vision body/face analysis,
-      a StyleMate SQLite database (<code>stylemate.db</code>), personalized garment recommendations, and
-      a real-time Three.js 3D human avatar — all in one integrated platform. Upload your photo, get AI-driven
-      style insights, and try outfits on a photorealistic 3D model instantly.
-    </p>
-    <div class="tech-row">
-      <span class="tech-pill">🐍 Python 3 + Flask</span>
-      <span class="tech-pill">🗄️ SQLite + SQLAlchemy</span>
-      <span class="tech-pill">🌐 Flask-CORS</span>
-      <span class="tech-pill">🎮 Three.js r128</span>
-      <span class="tech-pill">🧊 GLTFLoader</span>
-      <span class="tech-pill">🤖 NumPy + Pillow AI</span>
-      <span class="tech-pill">📓 Google Colab</span>
-    </div>
-  </section>
+<section id="about" class="block about">
+  <h2>About</h2>
+  <p>StyleMate combines body and face analysis, a SQLite store, an AI-ranked product catalog, and a Three.js avatar.
+     The heavy models run as optional local services: MiVOLO (age), MediaPipe + ArUco (height), FashionCLIP (tags, search, recommendations) and the VisionFit-AI clothing classifier
+     by Akshit Kandari (cloth analysis of uploaded garments).
+     When a service is off, the app falls back to simpler local logic and tells you so.</p>
+  <div class="tech-row">
+    <span class="tech-pill">Flask + SQLite</span><span class="tech-pill">MediaPipe Pose</span><span class="tech-pill">MiVOLO v2</span>
+    <span class="tech-pill">FashionCLIP</span><span class="tech-pill">VisionFit classifier (MobileNetV2)</span><span class="tech-pill">Verlet cloth</span><span class="tech-pill">Three.js r128</span>
+  </div>
+  <p style="font-size:12px;color:#7a6f66;margin-top:14px;">MiVOLO (age model) is licensed for non-commercial use only.</p>
+</section>
+<footer><b style="color:#fff;">StyleMate</b> · AI stylist &amp; 3D try-on prototype</footer>
 
-  <footer>
-    <p><strong>AI Fashion Stylist &amp; 3D Virtual Try-On Studio</strong> — Phase 1 Complete · Built with ❤️</p>
-  </footer>
-
+<div class="outfit-bar" id="outfit-bar">
+  <b>Your outfit</b>
+  <div class="items" id="outfit-items"></div>
+  <button class="primary small" id="wear-btn">Wear in 3D</button>
+  <button class="small" id="save-outfit-btn" style="background:#059669;">Save outfit</button>
+  <button class="ghost small" id="clear-outfit-btn">Clear</button>
+  <span id="save-outfit-msg" style="font-size:12px;"></span>
 </div>
 
 <script>
-// ═══════════════════════════════════════════════════════
-// CONFIG
-// ═══════════════════════════════════════════════════════
-const API_BASE = '';   // Same-origin when served by mini.py
+// ═════════════════════════ helpers
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+async function api(path, opts = {}) {
+  const res = await fetch(path, opts);
+  let data = null;
+  try { data = await res.json(); } catch { /* non-json */ }
+  if (!res.ok) throw new Error((data && data.error) || `HTTP ${res.status}`);
+  return data;
+}
+const postJSON = (path, body) => api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+function setMsg(el, text, kind) { el.textContent = text || ''; el.className = 'msg' + (kind ? ' ' + kind : ''); }
 
-// ═══════════════════════════════════════════════════════
-// 1. API CONNECTION CHECK
-// ═══════════════════════════════════════════════════════
-let apiOnline = false;
+// ═════════════════════════ state
+const state = {
+  userId: 1, file: null, analysis: null, occasion: 'everyday',
+  liked: new Set(), outfit: new Map(), items: new Map(), services: {},
+};
 
+// ═════════════════════════ 1. API + services status
 async function checkApiStatus() {
-  const badge = document.getElementById('api-badge');
-  const banner = document.getElementById('connection-banner');
+  const badge = $('api-badge');
   try {
-    const res = await fetch(API_BASE + '/api/status', { signal: AbortSignal.timeout(3000) });
-    const data = await res.json();
-    apiOnline = true;
-    badge.textContent = '● API Online ✓';
-    badge.className = 'status-badge';
-    banner.className = 'online';
-    banner.textContent = `✓ StyleMate API connected — ${data.users_count} user(s), ${data.clothing_count} clothing items, ${data.analyses_count} analysis record(s) in SQLite DB`;
+    await api('/api/status');
+    badge.textContent = '● Online'; badge.className = 'status-badge';
     loadSavedOutfits();
   } catch {
-    apiOnline = false;
-    badge.textContent = '● Offline Mode';
-    badge.className = 'status-badge offline';
-    banner.className = 'offline';
-    banner.textContent = '⚠️ Backend offline — running in demo mode (start mini.py to enable SQLite persistence)';
+    badge.textContent = '● Backend offline'; badge.className = 'status-badge offline';
   }
 }
-
-window.addEventListener('load', checkApiStatus);
-
-// ═══════════════════════════════════════════════════════
-// 2. USER MANAGEMENT
-// ═══════════════════════════════════════════════════════
-let currentUserId = 1;
-
-async function registerOrSwitchUser() {
-  const name = document.getElementById('user-name-input').value.trim();
-  const email = document.getElementById('user-email-input').value.trim();
-  const msg = document.getElementById('user-status-msg');
-  if (!name || !email) { msg.textContent = 'Please enter both name and email.'; msg.style.display = 'block'; return; }
-
+async function refreshServices() {
   try {
-    const res = await fetch(API_BASE + '/api/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email })
-    });
-    const data = await res.json();
-    if (data.user_id) {
-      currentUserId = data.user_id;
-      document.getElementById('active-user-id').textContent = currentUserId;
-      msg.textContent = `✓ Active User #${currentUserId}: ${name}`;
-      msg.style.display = 'block';
-      loadSavedOutfits();
-    }
-  } catch {
-    msg.textContent = 'Could not connect to API. Demo mode active.';
-    msg.style.display = 'block';
-  }
+    const d = await api('/api/services');
+    state.services = d.services;
+    const names = { age: 'Age', height: 'Height', fashion: 'Recommendations', cloth: 'Cloth analysis' };
+    const sync = d.catalog_sync && d.catalog_sync.running ? ` · syncing catalog ${d.catalog_sync.done}/${d.catalog_sync.total}` : '';
+    $('svc-strip').innerHTML = '<span>AI services:</span>' + Object.entries(d.services).map(([k, v]) =>
+      `<span class="svc ${v.online ? 'on' : 'off'}" title="${esc(v.description)} — ${esc(v.url)}"><span class="dot"></span>${names[k] || k}</span>`).join('') +
+      `<span class="hint">${d.disabled ? 'AI services disabled' : 'offline services fall back to built-in logic'}${sync}</span>`;
+  } catch { /* backend offline */ }
 }
 
-// ═══════════════════════════════════════════════════════
-// 3. FILE UPLOAD & DRAG-AND-DROP
-// ═══════════════════════════════════════════════════════
-let currentFile = null;
+// ═════════════════════════ 2. user
+$('user-btn').onclick = async () => {
+  const name = $('user-name-input').value.trim(), email = $('user-email-input').value.trim();
+  if (!name || !email) return setMsg($('user-msg'), 'Please enter a name and email.', 'err');
+  try {
+    const d = await postJSON('/api/users', { name, email });
+    state.userId = d.user_id; $('active-user-id').textContent = d.user_id;
+    setMsg($('user-msg'), `Active user #${d.user_id}: ${d.name}`, 'ok');
+    loadSavedOutfits();
+  } catch (e) { setMsg($('user-msg'), e.message, 'err'); }
+};
 
-const dropZone = document.getElementById('drop-zone');
+// ═════════════════════════ 3. upload & analysis
+const dropZone = $('drop-zone');
+dropZone.onclick = () => $('file-input').click();
 dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-dropZone.addEventListener('drop', (e) => {
-  e.preventDefault();
-  dropZone.classList.remove('dragover');
-  const file = e.dataTransfer.files[0];
-  if (file) setFile(file);
-});
-
-function handleFileChange(e) {
-  const file = e.target.files[0];
-  if (file) setFile(file);
-}
+dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
+$('file-input').onchange = (e) => { if (e.target.files[0]) setFile(e.target.files[0]); };
 
 function setFile(file) {
-  currentFile = file;
-  document.getElementById('preview-img').src = URL.createObjectURL(file);
-  document.getElementById('preview-box').style.display = 'block';
-  document.getElementById('error-msg').style.display = 'none';
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return setMsg($('upload-msg'), 'Please choose a JPG, PNG or WEBP image.', 'err');
+  if (file.size > 10 * 1024 * 1024) return setMsg($('upload-msg'), 'That image is over 10 MB.', 'err');
+  state.file = file;
+  $('preview-img').src = URL.createObjectURL(file); $('preview-img').style.display = 'block';
+  setMsg($('upload-msg'), '');
 }
-
-function useSamplePhoto() {
-  document.getElementById('preview-img').src = '/samples/1_target_person.jpg';
-  document.getElementById('preview-box').style.display = 'block';
-  currentFile = new Blob(['sample_model_image_data'], { type: 'image/jpeg' });
-  currentFile.name = 'sample_person.jpg';
+$('sample-btn').onclick = async () => {
+  const blob = await (await fetch('/samples/1_target_person.jpg')).blob();
+  setFile(new File([blob], 'sample_person.jpg', { type: 'image/jpeg' }));
   analyzeImage();
-}
-
-// ═══════════════════════════════════════════════════════
-// 4. AI ANALYSIS
-// ═══════════════════════════════════════════════════════
-let lastClothes = [], lastShoes = [], lastGlasses = [];
-let selectedClothes = [], selectedSunglasses = [];
+};
+$('analyze-btn').onclick = analyzeImage;
 
 async function analyzeImage() {
-  const errorMsg = document.getElementById('error-msg');
-  const btn = document.getElementById('analyze-btn');
-  if (!currentFile) {
-    errorMsg.textContent = 'Please select an image first, or click "Use Sample Photo".';
-    errorMsg.style.display = 'block';
-    return;
-  }
-  btn.textContent = '⏳ Uploading & Analyzing...';
-  btn.disabled = true;
-  errorMsg.style.display = 'none';
-
-  const formData = new FormData();
-  formData.append('image', currentFile, currentFile.name || 'upload.jpg');
-  formData.append('user_id', String(currentUserId));
-  const heightVal = parseFloat(document.getElementById('user-height-input')?.value) || 175;
-  formData.append('height_cm', String(heightVal));
-
+  if (!state.file) return setMsg($('upload-msg'), 'Choose a photo first, or use the sample.', 'err');
+  const btn = $('analyze-btn');
+  btn.disabled = true; btn.textContent = 'Analyzing…';
+  setMsg($('upload-msg'), 'Detecting age, body landmarks and measurements…');
+  const fd = new FormData();
+  fd.append('image', state.file, state.file.name || 'upload.jpg');
+  fd.append('user_id', String(state.userId));
+  if ($('height-input').value) fd.append('height_cm', $('height-input').value);
+  if ($('gender-input').value) fd.append('gender', $('gender-input').value);
+  if ($('marker-input').value) fd.append('marker_cm', $('marker-input').value);
   try {
-    const res = await fetch(API_BASE + '/api/upload', { method: 'POST', body: formData });
-    if (!res.ok) throw new Error('API error');
-    const data = await res.json();
-    renderAnalysisResults(data);
-    loadSavedOutfits();
-  } catch {
-    // Demo fallback when API offline
-    renderAnalysisResults({
-      body_type: 'Athletic / Balanced Silhouette',
-      face_shape: 'Oval / Balanced',
-      body_measurements: { shoulder_cm: 47, chest_cm: 100, waist_cm: 82, hip_cm: 96 },
-      recommended_clothes: ['Navy Tailored Blazer', 'Cyber Urban Hoodie', 'White Oxford Shirt', 'Leather Rider Jacket'],
-      recommended_shoes: ['White Leather Sneakers', 'Suede Chelsea Boots', 'Penny Loafers'],
-      recommended_sunglasses: ['Gold Aviator Sunglasses', 'Matte Black Wayfarer', 'Round Retro Shades']
-    });
+    const data = await api('/api/upload', { method: 'POST', body: fd });
+    state.analysis = data;
+    renderAnalysis(data);
+    renderRecommendations({ engine: data.recommendation_engine, groups: data.catalog_recommendations });
+    setMsg($('upload-msg'), 'Done — scroll down for your profile and picks.', 'ok');
+    $('results').scrollIntoView({ behavior: 'smooth' });
+  } catch (e) {
+    setMsg($('upload-msg'), `Analysis failed: ${e.message}. Is mini.py running?`, 'err');
   } finally {
-    btn.textContent = '📤 Upload & Analyze Image';
-    btn.disabled = false;
+    btn.disabled = false; btn.textContent = 'Analyze my photo';
   }
 }
 
-function renderAnalysisResults(data) {
-  document.getElementById('res-body-type').textContent = data.body_type || 'Athletic';
-  document.getElementById('res-face-shape').textContent = data.face_shape || 'Oval';
+const SOURCE_LABEL = { marker: ['from marker', 'ok'], user: ['you entered', 'ok'], estimated: ['estimated', 'warn'],
+  detected: ['detected', 'ai'], unknown: ['unknown', 'warn'] };
+function srcTag(src) { const [t, k] = SOURCE_LABEL[src] || [src, '']; return `<span class="tag ${k}">${esc(t)}</span>`; }
 
-  // Clothing size
-  const sizeEl = document.getElementById('res-size');
-  if (sizeEl) sizeEl.textContent = data.clothing_size ? `Size ${data.clothing_size}` : '-';
+function renderAnalysis(d) {
+  $('results').classList.add('visible');
+  $('res-analysis-id').textContent = d.analysis_id ? `saved as #${d.analysis_id}` : '';
+  const used = (d.services_used || []);
+  $('res-engine').innerHTML = `Analysis by ${used.length ? used.map((s) => `<span class="tag ai">${esc(s)} service</span>`).join(' ') + ' + ' : ''}<span class="tag">${esc(d.analysis_method || 'local')}</span>`;
+  $('res-photo').src = d.image_url || '';
+  $('res-age').innerHTML = d.age != null ? `${Math.round(d.age)} <span class="tag ai">${d.age_range ? esc(d.age_range.join('–')) : ''}</span>` : '<span class="tag">not detected</span>';
+  $('res-gender').innerHTML = `${esc(d.gender || '–')} ${srcTag(d.gender_source)}`;
+  $('res-height').innerHTML = `${esc(d.height_cm)} cm ${srcTag(d.height_source)}`;
+  const sbc = d.sizes_by_category || {};
+  const extra = Object.entries(sbc).filter(([k]) => k !== 'tops').map(([k, v]) => `${esc(k)} <b>${esc(v)}</b>`).join(' · ');
+  $('res-size').innerHTML = `${esc(d.clothing_size)} <span class="tag">${d.size_system === 'kids' ? 'kidswear' : 'adult'}</span>`
+    + (extra ? `<div style="font-size:12px;color:var(--mute);font-weight:500;">tops <b>${esc(sbc.tops || d.clothing_size)}</b> · ${extra}</div>` : '');
+  $('res-body-type').textContent = d.body_type || '–';
 
-  // Fit confidence
-  const confEl = document.getElementById('res-confidence');
-  if (confEl && data.fit_confidence) {
-    confEl.textContent = `${data.fit_confidence}% (SSIM: ${data.ssim_score || '-'})`;
-  }
+  const m = d.body_measurements || {};
+  const rows = [['Shoulder width', m.shoulder_cm], ['Chest', m.chest_cm], ['Waist', m.waist_cm], ['Hips', m.hip_cm],
+    ['Torso', m.torso_cm], ['Arm length', m.arm_cm], ['Inseam (approx.)', m.inseam_cm], ['Leg', m.leg_cm]];
+  $('res-measurements').innerHTML = rows.filter(([, v]) => v != null)
+    .map(([k, v]) => `<tr><td>${k}</td><td>${Number(v).toFixed(1)} cm</td></tr>`).join('');
 
-  // Analysis method badge
-  const badge = document.getElementById('res-method-badge');
-  if (badge) {
-    if (data.analysis_method === 'mediapipe_real' && data.landmarks_detected) {
-      badge.innerHTML = '🤖 <strong style="color:#059669;">MediaPipe Real Analysis</strong> — 33 body landmarks detected ✓';
-    } else {
-      badge.innerHTML = '⚡ <strong style="color:#f59e0b;">Simulated Analysis</strong> — install mediapipe for real measurements';
-    }
-  }
+  const c = d.measurement_confidence || { score: d.fit_confidence || 0, level: 'low', reasons: [] };
+  $('conf-bar').style.width = c.score + '%';
+  $('conf-bar').style.background = c.level === 'high' ? '#059669' : c.level === 'medium' ? '#d97706' : '#dc2626';
+  $('conf-text').textContent = `${c.score}/100 · ${c.level} confidence`;
+  $('conf-reasons').innerHTML = (c.reasons || []).map((r) => `<li>${esc(r)}</li>`).join('');
+  $('res-notes').innerHTML = (d.notes || []).map((n) => `<li>${esc(n)}</li>`).join('');
+  $('res-skin').textContent = `${d.skin_tone || ''} skin, ${String(d.undertone || '').toLowerCase()} undertone`;
+  const fa = d.face_analysis || {};
+  $('res-face-shape').textContent = fa.face_detected ? fa.face_shape : (d.face_shape || 'Not detected');
+  $('res-face-tag').textContent = fa.face_detected ? `measured from ${fa.landmark_count} face landmarks` : 'face not found';
+  $('res-face-tag').className = 'tag ' + (fa.face_detected ? (fa.face_shape_confidence === 'low' ? 'warn' : 'ai') : 'warn');
+  $('res-frames').innerHTML = fa.face_detected
+    ? `Frames that suit you: <b>${(fa.frame_advice || []).map(esc).join(', ')}</b>${fa.face_shape_confidence === 'low' ? ' · head is turned, so the shape is less certain' : ''}`
+    : esc(fa.reason || 'Use a front-facing photo with the face visible to get frame advice.');
+  $('res-palette').innerHTML = (d.recommended_colors || []).map((c2) => `<span class="swatch">${esc(c2)}</span>`).join('');
 
-  if (data.analysis_id) {
-    document.getElementById('res-analysis-id').textContent = `(SQLite Record #${data.analysis_id})`;
-  }
-  if (data.body_measurements) {
-    const m = data.body_measurements;
-    document.getElementById('res-measurements').textContent =
-      `Shoulders: ${m.shoulder_cm || 47}cm | Chest: ${m.chest_cm || 100}cm | Waist: ${m.waist_cm || 82}cm | Hips: ${m.hip_cm || 96}cm`;
-
-    // Extra measurements (torso, arm, leg) if available
-    const extraEl = document.getElementById('res-extra');
-    if (extraEl && m.torso_cm) {
-      extraEl.textContent = `Torso: ${m.torso_cm}cm | Arm: ${m.arm_cm}cm | Leg: ${m.leg_cm}cm | Height: ${m.height_cm}cm`;
-    } else if (extraEl) {
-      extraEl.textContent = '—';
-    }
-
-    // Auto-scale 3D Mannequin to match user's real body measurements
+  if (Object.keys(m).length) {
     window._lastMeasurements = m;
-    const customBtn = document.getElementById('phys-custom');
-    if (customBtn) customBtn.style.display = 'inline-block';
+    $('phys-custom').style.display = 'inline-block';
     applyMeasurementsToAvatar(m);
   }
-
-  lastClothes = data.recommended_clothes || [];
-  lastShoes = data.recommended_shoes || [];
-  lastGlasses = data.recommended_sunglasses || [];
-  selectedClothes = [];
-  selectedSunglasses = [];
-  updateSelectedSummary();
-
-  renderItemList('clothes-list', lastClothes, 'clothes');
-  renderItemList('shoes-list', lastShoes, 'shoes');
-  renderItemList('sunglasses-list', lastGlasses, 'glasses');
-
-  const sec = document.getElementById('results-section');
-  sec.classList.add('visible');
-  sec.scrollIntoView({ behavior: 'smooth' });
+  $('shop-lead').textContent = `Picked for ${d.is_child ? 'kids' : (d.gender === 'female' ? 'women' : d.gender === 'male' ? 'men' : 'everyone')} in size ${d.clothing_size}, matched to your ${String(d.undertone || 'neutral').toLowerCase()} colouring and ${String(d.body_type || '').split('(')[0].trim().toLowerCase()} build.`;
 }
 
-function renderItemList(containerId, items, type) {
-  const container = document.getElementById(containerId);
-  container.innerHTML = '';
-  items.forEach((item) => {
-    const isClothes = (type === 'clothes' || type === 'shoes');
-    const selectedArr = isClothes ? selectedClothes : selectedSunglasses;
-    const isSelected = selectedArr.includes(item);
-    const div = document.createElement('div');
-    div.className = isSelected ? 'recommendation selected' : 'recommendation';
-    div.innerHTML = `<span>${item}</span><button>${isSelected ? 'Selected ✓' : 'Select'}</button>`;
-    div.querySelector('button').onclick = () => {
-      if (selectedArr.includes(item)) {
-        const idx = selectedArr.indexOf(item);
-        selectedArr.splice(idx, 1);
-      } else {
-        selectedArr.push(item);
-      }
-      div.className = selectedArr.includes(item) ? 'recommendation selected' : 'recommendation';
-      div.querySelector('button').textContent = selectedArr.includes(item) ? 'Selected ✓' : 'Select';
-      updateSelectedSummary();
-    };
-    container.appendChild(div);
-  });
-}
+// ═════════════════════════ 4. recommendations & catalog
+const OCC = [['everyday', 'Everyday'], ['office', 'Office'], ['party', 'Party'], ['date', 'Date night'], ['sport', 'Sport'], ['ethnic', 'Ethnic']];
+$('occasions').innerHTML = '<span class="row-label">Occasion</span>' + OCC.map(([k, l]) => `<button class="chip ${k === 'everyday' ? 'active' : ''}" data-occ="${k}">${l}</button>`).join('');
+$('occasions').onclick = (e) => {
+  const b = e.target.closest('[data-occ]'); if (!b) return;
+  state.occasion = b.dataset.occ;
+  document.querySelectorAll('[data-occ]').forEach((x) => x.classList.toggle('active', x === b));
+  loadRecommendations();
+};
 
-function updateSelectedSummary() {
-  document.getElementById('selected-clothes-text').textContent =
-    selectedClothes.length > 0 ? selectedClothes.join(', ') : 'None selected';
-  document.getElementById('selected-glasses-text').textContent =
-    selectedSunglasses.length > 0 ? selectedSunglasses.join(', ') : 'None selected';
-}
-
-// ═══════════════════════════════════════════════════════
-// 5. SAVE / LOAD OUTFITS
-// ═══════════════════════════════════════════════════════
-async function saveOutfitToSQLite() {
-  const msg = document.getElementById('save-outfit-msg');
-  if (selectedClothes.length === 0 && selectedSunglasses.length === 0) {
-    msg.textContent = 'Please select at least one clothing item first.';
-    msg.style.display = 'block';
-    return;
-  }
-  msg.textContent = 'Saving to SQLite database...';
-  msg.style.display = 'block';
-
+async function loadRecommendations() {
   try {
-    const allItems = [...selectedClothes, ...selectedSunglasses];
-    for (const itemName of allItems) {
-      await fetch(API_BASE + '/api/outfits/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: currentUserId,
-          clothing_name: itemName,
-          accessory_id: selectedSunglasses.length > 0 ? 1 : null
-        })
-      });
-    }
-    msg.textContent = `✓ ${allItems.length} item(s) saved to StyleMate DB!`;
-    loadSavedOutfits();
-  } catch {
-    msg.textContent = 'Could not save — API offline.';
-  }
+    const d = await postJSON('/api/recommendations', {
+      analysis_id: state.analysis && state.analysis.analysis_id, occasion: state.occasion, liked_ids: [...state.liked],
+      max_price: $('budget-input').value || null, only_my_size: $('mysize-input').checked,
+    });
+    renderRecommendations(d);
+  } catch (e) { $('rec-groups').innerHTML = `<p class="msg err">${esc(e.message)}</p>`; }
 }
+
+function renderRecommendations(d) {
+  const eng = $('rec-engine');
+  eng.textContent = d.engine === 'fashionclip' ? 'AI-ranked (FashionCLIP)' : 'rule-based (AI service offline)';
+  eng.className = 'tag ' + (d.engine === 'fashionclip' ? 'ai' : 'warn');
+  const groups = d.groups || {};
+  const f = d.filtered_out || {};
+  $('filter-note').textContent = (f.budget || f.size)
+    ? `hidden: ${f.budget ? f.budget + ' over budget' : ''}${f.budget && f.size ? ', ' : ''}${f.size ? f.size + ' not in your size' : ''}` : '';
+  $('rec-groups').innerHTML = Object.entries(groups).map(([cat, items]) =>
+    `<div class="cat-title">${esc(cat)}</div><div class="products">${items.map(productCard).join('')}</div>`).join('') ||
+    '<p style="color:#999;">No items found.</p>';
+}
+
+function sizeBadge(it) {
+  const a = it.size_advice;
+  if (a) {
+    return a.in_stock ? `<div class="size ok">Your size <b>${esc(a.size)}</b> ✓ in stock</div>`
+      : `<div class="size bad">Your size ${esc(a.size)} sold out${a.suggested && a.suggested !== a.size ? ` · nearest ${esc(a.suggested)}` : ''}</div>`;
+  }
+  const sz = it.available_sizes || [];
+  return sz.length ? `<div class="size">${sz.length === 1 ? esc(sz[0]) : `${esc(sz[0])}–${esc(sz[sz.length - 1])}`}${it.fit_type && it.fit_type !== 'regular' ? ` · ${esc(it.fit_type)} fit` : ''}</div>` : '';
+}
+
+function productCard(it) {
+  state.items.set(it.id, it);
+  const why = (it.reasons || []).filter((r) => r !== 'AI style match').slice(0, 2).join(' · ');
+  return `<div class="product ${state.outfit.has(it.id) ? 'selected' : ''}" data-id="${it.id}">
+    <div class="img"><img src="${esc(it.image_path)}" alt="${esc(it.name)}" loading="lazy"></div>
+    <div class="name">${esc(it.name)}</div>
+    <div class="price">${it.price != null ? `${it.currency === 'INR' || !it.currency ? '₹' : esc(it.currency) + ' '}${Number(it.price).toLocaleString('en-IN')}` : ''}
+      ${it.price_is_demo ? '<span class="demo">demo price</span>' : ''}${it.brand ? ` <span class="brand">${esc(it.brand)}</span>` : ''}</div>
+    ${sizeBadge(it)}
+    <div class="meta"><span class="colour-dot" style="background:${esc(it.color || '#ccc')}"></span>${esc(it.colour_name || '')}
+      ${it.fabric ? `· ${esc(it.fabric)}` : ''} ${it.audience ? `· ${esc(it.audience)}` : ''}</div>
+    <div class="why">${esc(why)}</div>
+    <div class="acts">
+      <button class="small heart ${state.liked.has(it.id) ? 'on' : ''}" data-act="like" title="Like (re-ranks picks)">♥</button>
+      <button class="small" data-act="select">${state.outfit.has(it.id) ? '✓ In outfit' : '+ Outfit'}</button>
+      <button class="small ghost" data-act="wear">Wear in 3D</button>
+      <button class="small ghost" data-act="similar">Similar</button>
+      <button class="small ghost" data-act="complete">Complete look</button>
+      ${String(it.sku || '').startsWith('user-') ? '<button class="small ghost" data-act="delete" title="Remove from the catalog" style="color:var(--bad);">Delete</button>' : ''}
+    </div></div>`;
+}
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.product [data-act]'); if (!btn) return;
+  const id = Number(btn.closest('.product').dataset.id), it = state.items.get(id);
+  const act = btn.dataset.act;
+  if (act === 'like') {
+    state.liked.has(id) ? state.liked.delete(id) : state.liked.add(id);
+    document.querySelectorAll(`.product[data-id="${id}"] .heart`).forEach((h) => h.classList.toggle('on', state.liked.has(id)));
+    loadRecommendations();
+  } else if (act === 'select') {
+    state.outfit.has(id) ? state.outfit.delete(id) : state.outfit.set(id, it);
+    renderOutfitBar();
+    document.querySelectorAll(`.product[data-id="${id}"]`).forEach((p) => {
+      p.classList.toggle('selected', state.outfit.has(id));
+      p.querySelector('[data-act="select"]').textContent = state.outfit.has(id) ? '✓ In outfit' : '+ Outfit';
+    });
+  } else if (act === 'wear') {
+    applyItemTo3D(it); $('tryon-section').scrollIntoView({ behavior: 'smooth' });
+  } else if (act === 'similar' || act === 'complete') {
+    explore(it, act);
+  } else if (act === 'delete') {
+    if (!confirm(`Remove “${it.name}” from the catalog?`)) return;
+    try {
+      await api(`/api/clothing/${id}`, { method: 'DELETE' });
+      state.items.delete(id); state.outfit.delete(id); renderOutfitBar();
+      const worn = Studio.wornItems().find((w) => w.id === id);
+      if (worn) Studio.removeSlot(worn.slot);
+      document.querySelectorAll(`.product[data-id="${id}"]`).forEach((p) => p.remove());
+      loadMyUploads();
+    } catch (e2) { alert(e2.message); }
+  }
+});
+
+async function explore(it, mode) {
+  $('explore').classList.add('visible');
+  $('explore-title').textContent = mode === 'similar' ? `More like “${it.name}”` : `Goes with “${it.name}”`;
+  $('explore-body').innerHTML = '<div class="spinner"></div>';
+  $('explore').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  try {
+    if (mode === 'similar') {
+      const d = await api(`/api/clothing/${it.id}/similar?k=8`);
+      $('explore-body').innerHTML = `<div class="products">${d.results.map(productCard).join('')}</div>`;
+    } else {
+      const d = await api(`/api/clothing/${it.id}/complete`);
+      $('explore-body').innerHTML = Object.entries(d.groups).map(([cat, items]) =>
+        `<div class="cat-title">${esc(cat)}</div><div class="products">${items.map(productCard).join('')}</div>`).join('');
+    }
+  } catch (e) { $('explore-body').innerHTML = `<p class="msg err">${esc(e.message)}</p>`; }
+}
+$('explore-close').onclick = () => $('explore').classList.remove('visible');
+
+async function doSearch() {
+  const q = $('search-input').value.trim(); if (!q) return;
+  const a = state.analysis;
+  const aud = !a ? '' : a.is_child ? (a.gender === 'female' ? 'girls' : a.gender === 'male' ? 'boys' : 'boys,girls')
+    : (a.gender === 'female' ? 'women,unisex' : a.gender === 'male' ? 'men,unisex' : '');
+  $('explore').classList.add('visible');
+  $('explore-title').textContent = `Search: “${q}”`;
+  $('explore-body').innerHTML = '<div class="spinner"></div>';
+  try {
+    const d = await api(`/api/search?q=${encodeURIComponent(q)}&k=16${aud ? '&audience=' + aud : ''}`);
+    $('explore-title').innerHTML = `Search: “${esc(q)}” <span class="tag ${d.engine === 'fashionclip' ? 'ai' : 'warn'}">${d.engine === 'fashionclip' ? 'AI search' : 'keyword search'}</span>`;
+    $('explore-body').innerHTML = d.results.length ? `<div class="products">${d.results.map(productCard).join('')}</div>` : '<p style="color:#999;">Nothing found.</p>';
+  } catch (e) { $('explore-body').innerHTML = `<p class="msg err">${esc(e.message)}</p>`; }
+}
+$('search-btn').onclick = doSearch;
+$('budget-input').onchange = loadRecommendations;
+$('mysize-input').onchange = loadRecommendations;
+$('search-input').onkeydown = (e) => { if (e.key === 'Enter') doSearch(); };
+
+// ═════════════════════════ 5. outfit bar, saving
+function renderOutfitBar() {
+  const items = [...state.outfit.values()];
+  $('outfit-bar').classList.toggle('visible', items.length > 0);
+  $('outfit-items').innerHTML = items.map((it) => `<img src="${esc(it.image_path)}" title="${esc(it.name)}" alt="">`).join('');
+}
+$('clear-outfit-btn').onclick = () => {
+  state.outfit.clear(); renderOutfitBar();
+  document.querySelectorAll('.product.selected').forEach((p) => { p.classList.remove('selected'); p.querySelector('[data-act="select"]').textContent = '+ Outfit'; });
+};
+$('wear-btn').onclick = () => { Studio.resetOutfit(); [...state.outfit.values()].forEach(applyItemTo3D); $('tryon-section').scrollIntoView({ behavior: 'smooth' }); };
+$('save-outfit-btn').onclick = async () => {
+  const items = [...state.outfit.values()];
+  const msg = $('save-outfit-msg');
+  try {
+    for (const it of items) await postJSON('/api/outfits/save', { user_id: state.userId, clothing_id: it.id });
+    msg.textContent = `✓ Saved ${items.length} item(s)`;
+    loadSavedOutfits();
+  } catch (e) { msg.textContent = e.message; }
+};
 
 async function loadSavedOutfits() {
-  const container = document.getElementById('saved-outfits-list');
-  if (!container) return;
+  const box = $('saved-outfits-list');
   try {
-    const res = await fetch(API_BASE + `/api/outfits/${currentUserId}`);
-    if (!res.ok) return;
-    const outfits = await res.json();
-    if (!outfits.length) {
-      container.innerHTML = '<p style="color:#999;font-size:14px;">No outfits saved yet. Select items above and click "Save Outfit to DB".</p>';
-      return;
-    }
-    container.innerHTML = '';
-    outfits.forEach((o) => {
-      const div = document.createElement('div');
-      div.className = 'saved-outfit-item';
-      div.innerHTML = `
-        <span class="outfit-label">
-          <strong>Outfit #${o.outfit_id}</strong> — ${o.clothing_name}
-          ${o.accessory_id ? ' + 🕶️ Sunglasses' : ''}
-          <span style="font-size:11px;color:#aaa;"> · User #${o.user_id}</span>
-        </span>
-        <button onclick="trySavedOutfit('${o.clothing_name}', ${!!o.accessory_id})">Try on 3D</button>
-      `;
-      container.appendChild(div);
-    });
+    const outfits = await api(`/api/outfits/${state.userId}`);
+    if (!outfits.length) { box.innerHTML = '<p style="color:#999;font-size:14px;">No outfits saved yet. Add items with “+ Outfit”, then “Save outfit”.</p>'; return; }
+    box.innerHTML = outfits.map((o) => `<div class="saved-item" data-oid="${o.outfit_id}" data-cid="${o.clothing_id}">
+      ${o.image_path ? `<img src="${esc(o.image_path)}" alt="">` : ''}
+      <span><b>#${o.outfit_id}</b> ${esc(o.clothing_name)}</span>
+      <button class="small ghost" data-sact="wear">Wear in 3D</button>
+      <button class="small" data-sact="del" style="background:#dc2626;">Delete</button></div>`).join('');
   } catch { /* offline */ }
 }
+$('saved-outfits-list').onclick = async (e) => {
+  const b = e.target.closest('[data-sact]'); if (!b) return;
+  const row = b.closest('.saved-item');
+  if (b.dataset.sact === 'del') {
+    await api(`/api/outfits/item/${row.dataset.oid}`, { method: 'DELETE' }).catch(() => {});
+    loadSavedOutfits();
+  } else {
+    const it = await api(`/api/clothing/${Number(row.dataset.cid)}`);
+    applyItemTo3D(it);
+    $('tryon-section').scrollIntoView({ behavior: 'smooth' });
+  }
+};
 
-function trySavedOutfit(clothingName, hasGlasses) {
-  selectedClothes = [clothingName];
-  selectedSunglasses = hasGlasses ? ['Gold Aviator Sunglasses'] : [];
-  updateSelectedSummary();
-  applySelectedOutfitTo3D();
+// ═════════════════════════ 6. 3D avatar (static/js/avatar_studio.js)
+const Studio = window.AvatarStudio;
+function setStatus(msg) { $('outfit-status-label').textContent = msg; }
+const FIT_SLOTS = { top: 'tops', outer: 'outerwear', bottom: 'bottoms', dress: 'dresses' };
+const SLOT_LABEL = { top: 'Top', outer: 'Jacket', bottom: 'Bottom', dress: 'Dress', shoes: 'Shoes', sunglasses: 'Sunglasses',
+  watch: 'Watch', cap: 'Cap', belt: 'Belt', bag: 'Bag', backpack: 'Backpack' };
+let fitItem = null;
+
+function applyItemTo3D(it) {
+  if (!it) return;
+  const slot = Studio.slotFor(it);
+  if (!slot) { setStatus(`${it.name}: no 3D preview for this kind of item yet`); return; }
+  Studio.applyItem(it);
+  if (FIT_SLOTS[slot]) loadFit(it);
 }
 
-// ═══════════════════════════════════════════════════════
-// 6. REALISTIC 3D HUMAN MODEL & VIRTUAL TRY-ON ENGINE
-// ═══════════════════════════════════════════════════════
-let scene, camera, renderer, controls;
-let avatarModel, topMesh, bottomMesh, shoeMesh, bodyMesh, headMesh, hairMesh;
-let glassesGroup, watchGroup;
-let isShirtless = false;
-let currentSkinIndex = 0;
-let spinning = false;
+function renderWorn(items) {
+  const box = $('worn-list');
+  if (!items.length) { box.innerHTML = '<p class="tips">The base outfit. Add items from the recommendations or your uploaded clothes.</p>'; return; }
+  box.innerHTML = items.map((w) => `<div class="worn" data-slot="${esc(w.slot)}">
+      ${w.image_path ? `<img src="${esc(w.image_path)}" alt="">` : `<span class="colour-dot" style="background:${esc(w.color || '#ccc')};width:18px;height:18px;"></span>`}
+      <span class="n"><span class="slot">${esc(SLOT_LABEL[w.slot] || w.slot)}</span><br>${esc(w.name)}</span>
+      ${FIT_SLOTS[w.slot] ? '<button class="ghost" data-wact="fit">Fit</button>' : ''}
+      <button class="ghost" data-wact="remove" title="Take off">✕</button></div>`).join('');
+  if (fitItem && !items.some((w) => w.id === fitItem.id)) { fitItem = null; $('fit-panel').style.display = 'none'; Studio.setFit(null, null); }
+}
+$('worn-list').onclick = (e) => {
+  const b = e.target.closest('[data-wact]'); if (!b) return;
+  const slot = b.closest('.worn').dataset.slot;
+  const item = Studio.wornItems().find((w) => w.slot === slot);
+  if (b.dataset.wact === 'remove') Studio.removeSlot(slot);
+  else if (item) loadFit(item);
+};
 
-const SKIN_TONES = [
-  { name: 'Natural Warm Tan',      hex: '#ffffff' },
-  { name: 'Fair Warm Ivory',       hex: '#ffe4d6' },
-  { name: 'Mediterranean Olive',   hex: '#e8be9e' },
-  { name: 'Rich Deep Bronze',      hex: '#b37d5c' },
-  { name: 'Deep Ebony',            hex: '#6b3a2a' }
-];
-
-function applySelectedOutfitTo3D() {
-  const allClothes = selectedClothes.join(' ').toLowerCase();
-  const allGlasses = selectedSunglasses.join(' ').toLowerCase();
-
-  if (topMesh && topMesh.material) {
-    topMesh.visible = true;
-    isShirtless = false;
-    if (allClothes.includes('blazer') || allClothes.includes('navy')) topMesh.material.color.set('#1e3a8a');
-    else if (allClothes.includes('hoodie') || allClothes.includes('cyber')) topMesh.material.color.set('#e11d48');
-    else if (allClothes.includes('white') || allClothes.includes('oxford') || allClothes.includes('linen')) topMesh.material.color.set('#f8fafc');
-    else if (allClothes.includes('leather') || allClothes.includes('jacket')) topMesh.material.color.set('#0f172a');
-    else if (allClothes.includes('tee') || allClothes.includes('t-shirt') || allClothes.includes('athletic')) topMesh.material.color.set('#059669');
-    else if (selectedClothes.length > 0) topMesh.material.color.set('#4f46e5');
-    topMesh.material.needsUpdate = true;
-  }
-
-  if (bottomMesh && bottomMesh.material) {
-    if (allClothes.includes('chino')) bottomMesh.material.color.set('#b45309');
-    else if (allClothes.includes('cargo')) bottomMesh.material.color.set('#334155');
-    else if (allClothes.includes('denim') || allClothes.includes('jeans')) bottomMesh.material.color.set('#1d4ed8');
-    bottomMesh.material.needsUpdate = true;
-  }
-
-  if (shoeMesh && shoeMesh.material) {
-    if (allClothes.includes('white') && allClothes.includes('sneak')) shoeMesh.material.color.set('#f8fafc');
-    else if (allClothes.includes('suede') || allClothes.includes('brown') || allClothes.includes('loafer')) shoeMesh.material.color.set('#78350f');
-    else shoeMesh.material.color.set('#0f172a');
-    shoeMesh.material.needsUpdate = true;
-  }
-
-  if (glassesGroup) glassesGroup.visible = allGlasses.includes('aviator') || allGlasses.includes('sunglass');
-
-  const summary = [...selectedClothes, ...selectedSunglasses].join(', ');
-  document.getElementById('outfit-status-label').textContent =
-    summary ? `✓ Wearing: ${summary}` : '🧍 Realistic 3D Human Model — drag to rotate, scroll to zoom!';
-
-  document.getElementById('tryon-section').scrollIntoView({ behavior: 'smooth' });
+function resetAvatar() { Studio.resetOutfit(); Studio.setFit(null, null); $('fit-panel').style.display = 'none'; fitItem = null; }
+function applyMeasurementsToAvatar(m) {
+  Studio.setMeasurements(m, { age: state.analysis ? state.analysis.age : null });
+  ['athletic', 'muscular', 'slim'].forEach((id) => $('phys-' + id).classList.remove('active'));
+  $('phys-custom').classList.add('active');
 }
 
-function quickTry(mode) {
-  if (!topMesh || !topMesh.material) return;
-  topMesh.material.map = null;
-
-  if (mode === 'blazer') { topMesh.visible = true; isShirtless = false; topMesh.material.color.set('#1e3a8a'); setStatus('Wearing: Navy Tailored Blazer'); }
-  else if (mode === 'hoodie') { topMesh.visible = true; isShirtless = false; topMesh.material.color.set('#e11d48'); setStatus('Wearing: Cyber Street Hoodie'); }
-  else if (mode === 'oxford') { topMesh.visible = true; isShirtless = false; topMesh.material.color.set('#f8fafc'); setStatus('Wearing: White Oxford Shirt'); }
-  else if (mode === 'leather') { topMesh.visible = true; isShirtless = false; topMesh.material.color.set('#0f172a'); setStatus('Wearing: Vintage Leather Rider Jacket'); }
-  else if (mode === 'tshirt') { topMesh.visible = true; isShirtless = false; topMesh.material.color.set('#059669'); setStatus('Wearing: Fitted Athletic Tee'); }
-  else if (mode === 'chinos') { if (bottomMesh) { bottomMesh.material.color.set('#b45309'); bottomMesh.material.needsUpdate = true; } setStatus('Wearing: Tapered Tan Chinos'); return; }
-  else if (mode === 'denim') { if (bottomMesh) { bottomMesh.material.color.set('#1d4ed8'); bottomMesh.material.needsUpdate = true; } setStatus('Wearing: Selvedge Dark Denim Jeans'); return; }
-  else if (mode === 'cargo') { if (bottomMesh) { bottomMesh.material.color.set('#334155'); bottomMesh.material.needsUpdate = true; } setStatus('Wearing: Cargo Trousers'); return; }
-  else if (mode === 'aviator') { if (glassesGroup) { glassesGroup.visible = !glassesGroup.visible; setStatus(glassesGroup.visible ? 'Wearing: Gold Aviator Sunglasses' : 'Sunglasses removed'); } return; }
-  else if (mode === 'watch') { if (watchGroup) { watchGroup.visible = !watchGroup.visible; setStatus(watchGroup.visible ? 'Wearing: Luxury Chronograph Watch' : 'Watch removed'); } return; }
-  else if (mode === 'ai_texture') {
-    setStatus('⏳ Mapping AI VTON synthesized texture...');
-    new THREE.TextureLoader().load('/samples/4_vton_synthesis_result.jpg', (tex) => {
-      topMesh.visible = true; isShirtless = false;
-      topMesh.material.map = tex;
-      topMesh.material.color.set('#ffffff');
-      topMesh.material.needsUpdate = true;
-      setStatus('✨ AI Virtual Try-On Texture Applied!');
-    }, undefined, () => {
-      topMesh.material.color.set('#e11d48');
-      setStatus('AI Try-On Preset Active');
-    });
+async function loadFit(it, size) {
+  fitItem = it;
+  const panel = $('fit-panel');
+  panel.style.display = 'block';
+  $('fit-title').textContent = it.name;
+  if (!state.analysis || !it.id) {
+    $('fit-size').innerHTML = '';
+    $('fit-summary').textContent = state.analysis ? 'No size chart for this item.' : 'Analyze your photo to see how this fits you, size by size.';
+    $('fit-regions').innerHTML = '';
+    Studio.setFit(null, null);
     return;
   }
-  topMesh.material.needsUpdate = true;
+  try {
+    const d = await postJSON('/api/fit', { analysis_id: state.analysis.analysis_id, clothing_id: it.id, size });
+    if (!d.supported) { panel.style.display = 'none'; Studio.setFit(null, null); return; }
+    const stocked = new Set(d.available_sizes && d.available_sizes.length ? d.available_sizes : d.sizes);  // own uploads have no stock list
+    $('fit-size').innerHTML = d.sizes.map((s) => `<option value="${esc(s)}" ${s === d.size ? 'selected' : ''}>${esc(s)}${s === d.recommended_size ? ' ★ your size' : ''}${stocked.has(s) ? '' : ' (not stocked)'}</option>`).join('');
+    $('fit-summary').innerHTML = `<b>${esc(d.size)}:</b> ${esc(d.summary)}${d.size !== d.recommended_size ? ` · your size is <b>${esc(d.recommended_size)}</b>` : ''}`
+      + `<div class="tips" style="margin:4px 0 0;">${d.uses_product_chart ? `Using this product's size chart${d.fit_type && d.fit_type !== 'regular' ? ` (${esc(d.fit_type)} cut)` : ''}.` : 'Using a standard size chart.'}</div>`;
+    $('fit-regions').innerHTML = d.regions.map((r) => `<div class="fit-region"><b>${esc(r.region)}</b>
+      <span class="v-${esc(r.verdict)}">${esc(r.verdict)}</span><br>body ${r.body_cm} cm · garment ${r.garment_cm} cm (${r.ease_cm >= 0 ? '+' : ''}${r.ease_cm})</div>`).join('');
+    Studio.setFit(it.category, d.regions);
+    Studio.showHeat($('fit-heat').checked);
+  } catch (e) { $('fit-summary').textContent = e.message; }
 }
+$('fit-size').onchange = () => fitItem && loadFit(fitItem, $('fit-size').value);
+$('fit-heat').onchange = () => Studio.showHeat($('fit-heat').checked);
 
-function resetAvatar() {
-  if (topMesh) { topMesh.visible = true; topMesh.material.color.set('#4f46e5'); topMesh.material.map = null; topMesh.material.needsUpdate = true; }
-  if (bottomMesh) { bottomMesh.material.color.set('#1d4ed8'); bottomMesh.material.needsUpdate = true; }
-  if (shoeMesh) { shoeMesh.material.color.set('#0f172a'); shoeMesh.material.needsUpdate = true; }
-  if (glassesGroup) glassesGroup.visible = false;
-  if (watchGroup) watchGroup.visible = false;
-  if (avatarModel) avatarModel.scale.set(1, 1, 1);
-  isShirtless = false;
-  setStatus('🧍 Avatar reset — drag to rotate, scroll to zoom!');
+$('wind-input').oninput = (e) => Studio.setWind(e.target.value);
+function setView(v) { ['full', 'upper', 'face'].forEach((x) => $('cam-' + x).classList.toggle('active', x === v)); Studio.frameCamera(v); }
+$('cam-full').onclick = () => setView('full');
+$('cam-upper').onclick = () => setView('upper');
+$('cam-face').onclick = () => setView('face');
+$('spin-btn').onclick = () => {
+  const on = !$('spin-btn').classList.contains('active');
+  Studio.spin(on);
+  $('spin-btn').classList.toggle('active', on);
+  $('spin-btn').textContent = on ? '⏹ Stop' : '▶ Auto 360°';
+};
+document.querySelectorAll('[data-phys]').forEach((b) => (b.onclick = () => {
+  Studio.setPhysique(b.dataset.phys);
+  ['athletic', 'muscular', 'slim', 'custom'].forEach((id) => $('phys-' + id).classList.toggle('active', id === b.dataset.phys));
+}));
+$('phys-custom').onclick = () => window._lastMeasurements && applyMeasurementsToAvatar(window._lastMeasurements);
+$('skin-btn').onclick = () => Studio.cycleSkin();
+$('reset-btn').onclick = resetAvatar;
+
+// ═════════════════════════ 6. add your own clothes (cloth analysis)
+const VF_LABEL = { outwear: 'jacket / coat', longsleeve: 'long-sleeve top', pants: 'trousers', hat: 'hat / cap' };
+const cloth = { file: null, analysis: null };
+const clothDrop = $('cloth-drop');
+clothDrop.onclick = () => $('cloth-file').click();
+clothDrop.addEventListener('dragover', (e) => { e.preventDefault(); clothDrop.classList.add('dragover'); });
+clothDrop.addEventListener('dragleave', () => clothDrop.classList.remove('dragover'));
+clothDrop.addEventListener('drop', (e) => { e.preventDefault(); clothDrop.classList.remove('dragover'); if (e.dataTransfer.files[0]) setClothFile(e.dataTransfer.files[0]); });
+$('cloth-file').onchange = (e) => { if (e.target.files[0]) setClothFile(e.target.files[0]); };
+
+function setClothFile(file) {
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return setMsg($('cloth-msg'), 'Please choose a JPG, PNG or WEBP image.', 'err');
+  if (file.size > 10 * 1024 * 1024) return setMsg($('cloth-msg'), 'That image is over 10 MB.', 'err');
+  cloth.file = file; cloth.analysis = null;
+  $('cloth-preview').src = URL.createObjectURL(file); $('cloth-preview').style.display = 'block';
+  $('cloth-body').style.display = 'none'; $('cloth-empty').style.display = 'block';
+  setMsg($('cloth-msg'), ''); setMsg($('cloth-add-msg'), '');
 }
+$('cloth-sample-btn').onclick = async () => {
+  const blob = await (await fetch('/samples/2_garment_cloth.jpg')).blob();
+  setClothFile(new File([blob], 'sample_garment.jpg', { type: 'image/jpeg' }));
+  analyzeCloth();
+};
+$('cloth-analyze-btn').onclick = analyzeCloth;
 
-function setStatus(msg) {
-  document.getElementById('outfit-status-label').textContent = msg;
-}
-
-function toggleShirtless() {
-  isShirtless = !isShirtless;
-  document.getElementById('phys-shirtless').classList.toggle('active', isShirtless);
-  if (topMesh) topMesh.visible = !isShirtless;
-  setStatus(isShirtless ? 'Inspecting Sculpted Body (Shirtless)' : '🧍 Realistic 3D Model — drag to rotate!');
-}
-
-function setPhysique(mode) {
-  ['athletic','muscular','slim'].forEach(id => {
-    const el = document.getElementById('phys-' + id);
-    if (el) el.classList.toggle('active', id === mode);
-  });
-  if (!avatarModel) return;
-  if (mode === 'athletic') { avatarModel.scale.set(1.0, 1.0, 1.0); setStatus('Physique: Athletic Defined'); }
-  else if (mode === 'muscular') { avatarModel.scale.set(1.08, 1.01, 1.08); setStatus('Physique: Muscular Mesomorph'); }
-  else if (mode === 'slim') { avatarModel.scale.set(0.92, 1.01, 0.92); setStatus('Physique: Slim Tailored'); }
-  const customBtn = document.getElementById('phys-custom');
-  if (customBtn && mode !== 'custom') customBtn.classList.remove('active');
-}
-
-function applyMeasurementsToAvatar(m) {
-  if (!avatarModel || !m) return;
-  const shoulder = m.shoulder_cm || 47.0;
-  const waist = m.waist_cm || 82.0;
-  const hip = m.hip_cm || 96.0;
-  const height = m.height_cm || 175.0;
-
-  const scaleX = Math.min(Math.max(shoulder / 48.0, 0.82), 1.25);
-  const scaleY = Math.min(Math.max(height / 175.0, 0.85), 1.20);
-  const scaleZ = Math.min(Math.max(((waist / 82.0) + (hip / 96.0)) / 2.0, 0.82), 1.25);
-
-  avatarModel.scale.set(scaleX, scaleY, scaleZ);
-  ['athletic', 'muscular', 'slim'].forEach(id => {
-    const el = document.getElementById('phys-' + id);
-    if (el) el.classList.remove('active');
-  });
-  const customBtn = document.getElementById('phys-custom');
-  if (customBtn) customBtn.classList.add('active');
-  setStatus(`🎯 3D Mannequin scaled to your body: ${shoulder}cm shoulders, ${Math.round(height)}cm height`);
-}
-
-function applyCustomMeasurements() {
-  if (window._lastMeasurements) {
-    applyMeasurementsToAvatar(window._lastMeasurements);
+async function analyzeCloth() {
+  if (!cloth.file) return setMsg($('cloth-msg'), 'Choose a garment photo first, or use the sample.', 'err');
+  const btn = $('cloth-analyze-btn');
+  btn.disabled = true; btn.textContent = 'Analyzing…';
+  setMsg($('cloth-msg'), 'Classifying the garment and reading its colour and fabric…');
+  const fd = new FormData();
+  fd.append('image', cloth.file, cloth.file.name || 'garment.jpg');
+  try {
+    const d = await api('/api/clothing/analyze', { method: 'POST', body: fd });
+    cloth.analysis = d;
+    renderClothAnalysis(d);
+    setMsg($('cloth-msg'), d.engines.length ? 'Done. Check the details on the right.' : 'Analysis services are offline. Fill in the details yourself.', d.engines.length ? 'ok' : 'err');
+  } catch (e) {
+    setMsg($('cloth-msg'), `Analysis failed: ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Analyze garment';
   }
 }
 
-function cycleSkinTone() {
-  currentSkinIndex = (currentSkinIndex + 1) % SKIN_TONES.length;
-  const tone = SKIN_TONES[currentSkinIndex];
-  [headMesh, bodyMesh].forEach(mesh => {
-    if (mesh && mesh.material) { mesh.material.color.set(tone.hex); mesh.material.needsUpdate = true; }
-  });
-  setStatus(`Skin Tone: ${tone.name}`);
+const pct = (x) => `${Math.round(x * 100)}%`;
+function bars(rows) {
+  return `<div class="bars">${rows.map(([label, score]) => `<div class="bar"><b>${esc(label)}</b><div class="meter"><i style="width:${pct(score)}"></i></div><span>${pct(score)}</span></div>`).join('')}</div>`;
+}
+function renderClothAnalysis(d) {
+  $('cloth-empty').style.display = 'none'; $('cloth-body').style.display = 'block';
+  const vf = d.visionfit, fc = d.fashionclip;
+  $('cloth-vf').className = 'engine' + (vf ? '' : ' off');
+  $('cloth-vf').innerHTML = '<h4>VisionFit classifier <span class="tag ai">Akshit Kandari</span></h4>' + (vf
+    ? bars(vf.predictions.slice(0, 3).map((p) => [VF_LABEL[p.label] || p.label, p.score]))
+    : '<p class="tips">Cloth analysis service (port 5104) is offline.</p>');
+  $('cloth-fc').className = 'engine' + (fc ? '' : ' off');
+  $('cloth-fc').innerHTML = '<h4>FashionCLIP <span class="tag ai">type · colour · fabric</span></h4>' + (fc
+    ? bars(fc.type.slice(0, 3).map((p) => [p.label, p.p ?? p.score]))
+      + `<div class="tips" style="margin-top:6px;">${esc(fc.colour[0].label)} · ${esc(fc.fabric[0].label)} · ${esc(fc.style[0].label)}</div>`
+    : '<p class="tips">FashionCLIP service (port 5103) is offline.</p>');
+  const s = d.suggested;
+  const typeLabel = (k) => (d.types.find((t) => t.key === k) || {}).label || k;
+  const only = d.engines[0] === 'visionfit' ? 'the VisionFit classifier' : d.engines[0] === 'fashionclip' ? 'FashionCLIP' : 'the colour detector';
+  $('cloth-verdict').innerHTML = d.agree === true
+    ? `<div class="notice ok">Both models agree: <b>${esc(typeLabel(s.type))}</b>.</div>`
+    : d.agree === false
+      ? `<div class="notice warn">The models disagree (VisionFit: <b>${esc(VF_LABEL[vf.category] || vf.category)}</b>, FashionCLIP: <b>${esc(fc.type[0].label)}</b>). FashionCLIP's answer is filled in because it is right more often on our catalog. Please check the type.</div>`
+      : `<div class="notice warn">Only ${only} ran. Please check the details.</div>`;
+  $('cf-type').innerHTML = d.types.map((t) => `<option value="${esc(t.key)}" ${t.key === s.type ? 'selected' : ''}>${esc(t.label)}</option>`).join('');
+  $('cf-fabric').innerHTML = d.fabrics.map((f) => `<option ${f === s.fabric ? 'selected' : ''}>${esc(f)}</option>`).join('');
+  $('cf-name').value = s.name;
+  $('cf-color').value = s.color;
+  $('cf-colour-name').value = s.colour_name;
+  const usage = [...$('cf-usage').options].find((o) => o.value.toLowerCase() === String(s.usage).toLowerCase());
+  if (!usage) $('cf-usage').insertAdjacentHTML('beforeend', `<option>${esc(s.usage)}</option>`);
+  $('cf-usage').value = usage ? usage.value : s.usage;
+  if (state.analysis && !state.analysis.is_child && state.analysis.gender) $('cf-audience').value = state.analysis.gender === 'female' ? 'women' : 'men';
+  setMsg($('cloth-add-msg'), '');
 }
 
-function init3DStudio() {
-  const container = document.getElementById('three-container');
+$('cloth-add-btn').onclick = async () => {
+  if (!cloth.file || !cloth.analysis) return setMsg($('cloth-add-msg'), 'Analyze a garment first.', 'err');
+  const btn = $('cloth-add-btn');
+  const fd = new FormData();
+  fd.append('image', cloth.file, cloth.file.name || 'garment.jpg');
+  fd.append('type', $('cf-type').value);
+  fd.append('name', $('cf-name').value.trim());
+  fd.append('color', $('cf-color').value);
+  fd.append('colour_name', $('cf-colour-name').value.trim());
+  fd.append('fabric', $('cf-fabric').value);
+  fd.append('usage', $('cf-usage').value);
+  fd.append('audience', $('cf-audience').value);
+  if ($('cf-price').value) fd.append('price', $('cf-price').value);
+  btn.disabled = true;
+  try {
+    const d = await api('/api/clothing/upload', { method: 'POST', body: fd });
+    state.items.set(d.item.id, d.item);
+    setMsg($('cloth-add-msg'), `Added “${d.item.name}” to the catalog.`, 'ok');
+    loadMyUploads();
+    applyItemTo3D(d.item);
+    $('tryon-section').scrollIntoView({ behavior: 'smooth' });
+  } catch (e) {
+    setMsg($('cloth-add-msg'), e.message, 'err');
+  } finally { btn.disabled = false; }
+};
 
-  // Loading badge
-  const badge = document.createElement('div');
-  badge.id = 'model-loader-badge';
-  Object.assign(badge.style, {
-    position: 'absolute', top: '16px', left: '16px',
-    background: 'rgba(15,23,42,0.85)', color: '#fff',
-    padding: '8px 14px', borderRadius: '20px', fontSize: '12px',
-    fontWeight: '600', zIndex: '10', pointerEvents: 'none'
-  });
-  badge.textContent = '⏳ Loading 3D Model...';
-  container.appendChild(badge);
-
-  scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 100);
-  camera.position.set(0, 1.15, 2.35);
-
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setSize(container.clientWidth, container.clientHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.outputEncoding = THREE.sRGBEncoding;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
-  container.appendChild(renderer.domElement);
-
-  controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.05;
-  controls.target.set(0, 0.95, 0);
-  controls.minDistance = 0.8;
-  controls.maxDistance = 4.8;
-  controls.maxPolarAngle = Math.PI / 2 + 0.05;
-
-  // Studio Lighting
-  scene.add(new THREE.HemisphereLight(0xfff7ed, 0x1e293b, 0.75));
-  const key = new THREE.DirectionalLight(0xfff5ea, 1.35);
-  key.position.set(2.4, 3.6, 3.2); key.castShadow = true;
-  key.shadow.mapSize.width = key.shadow.mapSize.height = 2048;
-  scene.add(key);
-  const fill = new THREE.DirectionalLight(0xc7d2fe, 0.65);
-  fill.position.set(-2.5, 2.2, 1.5); scene.add(fill);
-  const rim = new THREE.DirectionalLight(0x38bdf8, 0.9);
-  rim.position.set(0, 2.8, -2.8); scene.add(rim);
-
-  // Podium
-  const podium = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.85, 0.95, 0.06, 64),
-    new THREE.MeshStandardMaterial({ color: 0x161f30, roughness: 0.25, metalness: 0.6 })
-  );
-  podium.position.y = -0.03; podium.receiveShadow = true; scene.add(podium);
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.88, 0.91, 64),
-    new THREE.MeshBasicMaterial({ color: 0x6366f1, side: THREE.DoubleSide })
-  );
-  ring.rotation.x = Math.PI / 2; ring.position.y = 0.002; scene.add(ring);
-
-  // Accessories
-  const goldMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.9, roughness: 0.2 });
-  const lensMat = new THREE.MeshStandardMaterial({ color: 0x090d16, metalness: 0.95, roughness: 0.1 });
-
-  glassesGroup = new THREE.Group();
-  [-1, 1].forEach((s) => {
-    glassesGroup.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.028, 0.01), lensMat), { position: new THREE.Vector3(s * 0.033, 0, 0) }));
-    glassesGroup.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.032, 0.008), goldMat), { position: new THREE.Vector3(s * 0.033, 0, -0.002) }));
-  });
-  glassesGroup.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.020, 0.005, 0.008), goldMat), { position: new THREE.Vector3(0, 0.006, 0) }));
-  glassesGroup.position.set(0, 1.723, 0.108);
-  glassesGroup.visible = false;
-  scene.add(glassesGroup);
-
-  watchGroup = new THREE.Group();
-  watchGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.024, 24), new THREE.MeshStandardMaterial({ color: 0x1e293b })));
-  const dial = new THREE.Mesh(new THREE.CylinderGeometry(0.020, 0.020, 0.010, 24), goldMat);
-  dial.rotation.z = Math.PI / 2; dial.position.set(-0.028, 0, 0); watchGroup.add(dial);
-  watchGroup.position.set(0.40, 1.10, 0.03); watchGroup.rotation.z = -0.28;
-  watchGroup.visible = false; scene.add(watchGroup);
-
-  // Load Real Human GLB Model — served by Flask at /web_app/models/
-  const loader = new THREE.GLTFLoader();
-  loader.load(
-    '/web_app/models/realistic_human.glb',
-    (gltf) => {
-      avatarModel = gltf.scene;
-      avatarModel.traverse((child) => {
-        if (child.isMesh) {
-          child.castShadow = child.receiveShadow = true;
-          if (child.material) child.material = child.material.clone();
-          if (child.name === 'Wolf3D_Outfit_Top') topMesh = child;
-          else if (child.name === 'Wolf3D_Outfit_Bottom') bottomMesh = child;
-          else if (child.name === 'Wolf3D_Outfit_Footwear') shoeMesh = child;
-          else if (child.name === 'Wolf3D_Body') bodyMesh = child;
-          else if (child.name === 'Wolf3D_Head') headMesh = child;
-          else if (child.name === 'Wolf3D_Hair') hairMesh = child;
-        }
-      });
-      scene.add(avatarModel);
-      badge.textContent = '✓ 3D Human Ready!';
-      setTimeout(() => { badge.style.opacity = '0'; badge.style.transition = 'opacity 0.6s'; }, 1600);
-    },
-    (xhr) => {
-      if (xhr.lengthComputable) badge.textContent = `⏳ Loading 3D Model (${Math.round(xhr.loaded / xhr.total * 100)}%)...`;
-    },
-    (err) => {
-      console.error('[3D Studio] Load error:', err);
-      badge.textContent = '⚠️ 3D model load error — check /web_app/models/realistic_human.glb';
-      badge.style.background = 'rgba(239,68,68,0.9)';
-    }
-  );
-
-  window.addEventListener('resize', () => {
-    camera.aspect = container.clientWidth / container.clientHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(container.clientWidth, container.clientHeight);
-  });
-
-  const clock = new THREE.Clock();
-  (function animate() {
-    requestAnimationFrame(animate);
-    if (avatarModel) avatarModel.position.y = Math.sin(clock.getElapsedTime() * 1.8) * 0.002;
-    controls.update();
-    renderer.render(scene, camera);
-  })();
+async function loadMyUploads() {
+  try {
+    const items = await api('/api/clothing?source=user');
+    $('my-uploads-count').textContent = items.length ? String(items.length) : '';
+    $('my-uploads').innerHTML = items.length ? `<div class="products">${items.map(productCard).join('')}</div>`
+      : '<p class="tips">Nothing uploaded yet.</p>';
+  } catch { /* backend offline */ }
 }
 
-function setCameraView(view) {
-  ['full','upper','face'].forEach(v => document.getElementById('cam-' + v).classList.toggle('active', v === view));
-  if (view === 'full') { camera.position.set(0, 1.15, 2.35); controls.target.set(0, 0.95, 0); }
-  else if (view === 'upper') { camera.position.set(0, 1.45, 1.55); controls.target.set(0, 1.35, 0); }
-  else if (view === 'face') { camera.position.set(0, 1.72, 0.72); controls.target.set(0, 1.70, 0); }
-  controls.update();
-}
-
-function toggleSpin() {
-  controls.autoRotate = !controls.autoRotate;
-  controls.autoRotateSpeed = 2.2;
-  const btn = document.getElementById('spin-btn');
-  btn.classList.toggle('active', controls.autoRotate);
-  btn.textContent = controls.autoRotate ? '⏹ Stop Spin' : '▶ Auto 360°';
-}
-
-window.onload = init3DStudio;
+// ═════════════════════════ boot
+window.addEventListener('load', () => {
+  Studio.init($('three-container'), {
+    onStatus: setStatus,
+    onOutfit: renderWorn,
+    onReady: () => { setView('full'); if (window._lastMeasurements) applyMeasurementsToAvatar(window._lastMeasurements); },
+  });
+  checkApiStatus();
+  refreshServices();
+  setInterval(refreshServices, 8000);
+  loadRecommendations();   // generic picks before any photo is analyzed
+  loadMyUploads();
+});
 </script>
 </body>
 </html>

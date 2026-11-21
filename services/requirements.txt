@@ -1,0 +1,21 @@
+# Python 3.12 venv (torch has no wheels for 3.15 yet)
+#   python -m uv venv services/.venv --python 3.12
+#   python -m uv pip install --python services/.venv/Scripts/python.exe torch torchvision --index-url https://download.pytorch.org/whl/cu128
+#   python -m uv pip install --python services/.venv/Scripts/python.exe -r services/requirements.txt
+fastapi
+uvicorn
+python-multipart
+requests
+pillow
+numpy
+opencv-contrib-python
+mediapipe
+transformers==4.51.0      # pinned by MiVOLO v2 remote code
+accelerate==1.8.1
+huggingface_hub
+safetensors
+timm==0.8.13.dev0          # MiVOLO needs this exact pre-release (install with --prerelease=allow)
+scipy
+setuptools<81
+# then: uv pip install --no-deps --no-build-isolation git+https://github.com/WildChlamydia/MiVOLO.git
+pyarrow

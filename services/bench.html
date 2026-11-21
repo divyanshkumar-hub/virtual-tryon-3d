@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model Test Bench</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%233557d4'/%3E%3Ccircle cx='32' cy='32' r='14' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#16181d;--mute:#626a77;--line:#e3e6eb;--acc:#3557d4;--acc-soft:#e8edfc;--ok:#1d7a46;--ok-soft:#e3f4ea;--bad:#b4302b;--bad-soft:#fbe7e6;--warn:#9a6200;--warn-soft:#fdf1dc}
+@media (prefers-color-scheme:dark){:root{--bg:#111318;--card:#1a1d24;--ink:#e8eaee;--mute:#99a1ad;--line:#2b2f39;--acc:#7c95f0;--acc-soft:#232b45;--ok:#5cc98a;--ok-soft:#173225;--bad:#ef7a73;--bad-soft:#3a1d1c;--warn:#e5b45a;--warn-soft:#3a2d14}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+header h1{font-size:16px;margin:0 12px 0 0}
+.svc{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:12.5px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mute)}
+.up .dot{background:var(--ok)}.starting .dot{background:var(--warn)}.down .dot{background:var(--bad)}
+.svc button{font-size:11.5px;padding:2px 7px}
+.gpu{margin-left:auto;font-size:12px;color:var(--mute);display:flex;align-items:center;gap:6px}
+.bar{width:110px;height:7px;background:var(--line);border-radius:4px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--acc)}
+nav{display:flex;gap:4px;padding:10px 16px 0;flex-wrap:wrap}
+nav button{border:0;background:none;padding:8px 12px;border-radius:8px 8px 0 0;color:var(--mute);font-weight:600;cursor:pointer}
+nav button.on{background:var(--card);color:var(--ink);box-shadow:0 -1px 0 var(--line) inset}
+main{padding:0 16px 40px}
+section{display:none;background:var(--card);border:1px solid var(--line);border-radius:0 10px 10px 10px;padding:16px}
+section.on{display:block}
+h2{font-size:15px;margin:0 0 4px}h3{font-size:13.5px;margin:18px 0 8px}
+p.note{color:var(--mute);margin:0 0 12px;font-size:13px}
+button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:7px;padding:6px 11px;cursor:pointer}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+button:disabled{opacity:.5;cursor:default}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:5px 8px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.tile{border:1px solid var(--line);border-radius:8px;padding:6px;font-size:12px;background:var(--bg);cursor:pointer;position:relative}
+.tile img{width:100%;aspect-ratio:3/4;object-fit:contain;background:#fff;border-radius:5px;display:block}
+.tile.sel{outline:2px solid var(--acc)}
+.split{display:grid;grid-template-columns:minmax(220px,320px) 1fr;gap:16px}
+@media (max-width:760px){.split{grid-template-columns:1fr}}
+.preview{width:100%;max-height:420px;object-fit:contain;border-radius:8px;border:1px solid var(--line);background:#fff}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:middle}
+th{color:var(--mute);font-weight:600}
+td img{height:56px;border-radius:4px;background:#fff}
+.pill{display:inline-block;border-radius:999px;padding:1px 8px;font-size:11.5px;font-weight:600}
+.ok{background:var(--ok-soft);color:var(--ok)}.bad{background:var(--bad-soft);color:var(--bad)}.warn{background:var(--warn-soft);color:var(--warn)}
+.prob{display:flex;align-items:center;gap:6px;margin:2px 0}.prob .bar{width:120px}
+.stats{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0}
+.stat{border:1px solid var(--line);border-radius:8px;padding:8px 12px;min-width:120px}
+.stat b{display:block;font-size:20px}.stat span{color:var(--mute);font-size:12px}
+.samples{display:flex;gap:6px;flex-wrap:wrap}.samples img{height:64px;border-radius:5px;border:1px solid var(--line);cursor:pointer;background:#fff}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;overflow:auto;font-size:12px;max-height:260px}
+.err{color:var(--bad)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Model Test Bench</h1>
+  <div id="svcs" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+  <div class="gpu">GPU <div class="bar"><i id="gpubar" style="width:0"></i></div><span id="gputxt"></span></div>
+</header>
+<nav id="tabs"></nav>
+<main>
+
+<section data-tab="Autonomous test">
+  <h2>Autonomous test</h2>
+  <p class="note">Takes random labelled samples, sends them to the running services and scores the answers live. Faces come from UTKFace (true age), products from the fashion dataset (true type/colour/usage), height from the marker test images (assumed truth 110 cm).</p>
+  <div class="row">
+    <label>Samples per test <select id="autoN"><option>8</option><option selected>16</option><option>32</option></select></label>
+    <button class="primary" id="autoRun">Run autonomous test</button>
+    <span id="autoMsg" class="note"></span>
+  </div>
+  <div id="autoOut"></div>
+</section>
+
+<section data-tab="Age">
+  <h2>Age &amp; gender — MiVOLO v2 vs ViT baseline</h2>
+  <p class="note">Upload a photo or pick a sample. "auto" finds face + body; use "face" for already-cropped faces.</p>
+  <div class="split">
+    <div>
+      <input type="file" id="ageFile" accept="image/*">
+      <div class="row"><label>mode <select id="ageMode"><option>auto</option><option>face</option><option>body</option></select></label>
+      <button class="primary" id="ageRun">Estimate</button></div>
+      <div class="samples" id="ageSamples"></div>
+    </div>
+    <div><img id="agePrev" class="preview" alt=""><div id="ageOut"></div></div>
+  </div>
+</section>
+
+<section data-tab="Height">
+  <h2>Height &amp; body measurements</h2>
+  <p class="note">The most reliable way is to print an ArUco marker (DICT_4X4_50) and hold it flat at body depth. Without a marker, give a known height or rely on depth, which is unreliable.</p>
+  <div class="split">
+    <div>
+      <input type="file" id="hFile" accept="image/*">
+      <div class="row"><label>known height (cm) <input id="hUser" type="number" style="width:80px" placeholder="optional"></label></div>
+      <div class="row"><label>marker side (cm) <input id="hMarker" type="number" value="15" style="width:70px"></label>
+      <label><input type="checkbox" id="hDepth" checked> metric depth</label></div>
+      <div class="row"><button class="primary" id="hRun">Estimate</button> <a id="markerLink" href="#">download marker</a></div>
+      <div class="samples" id="hSamples"></div>
+    </div>
+    <div><img id="hPrev" class="preview" alt=""><div id="hOut"></div></div>
+  </div>
+</section>
+
+<section data-tab="Fashion tags">
+  <h2>Garment tagging — FashionCLIP</h2>
+  <p class="note">Type, colour, fabric (with cloth-simulation presets) and style, zero-shot.</p>
+  <div class="split">
+    <div>
+      <input type="file" id="fFile" accept="image/*">
+      <div class="row"><button class="primary" id="fRun">Tag</button></div>
+      <div class="samples" id="fSamples"></div>
+    </div>
+    <div><img id="fPrev" class="preview" alt=""><div id="fOut"></div></div>
+  </div>
+</section>
+
+<section data-tab="Search & recommend">
+  <h2>Catalog search &amp; recommendations</h2>
+  <p class="note">Load demo products into the FashionCLIP catalog (in memory). Then search by text, click a tile for similar items, or tick a few likes and ask for recommendations.</p>
+  <div class="row"><label>items <select id="catN"><option>100</option><option selected>200</option><option>600</option></select></label>
+    <button id="catLoad" class="primary">Load catalog</button><span id="catMsg" class="note"></span></div>
+  <div class="row"><input id="q" placeholder="e.g. navy formal shirt, summer sandals, party dress" style="flex:1;min-width:220px"><button id="qRun">Search</button></div>
+  <div class="row"><input id="occ" placeholder="occasion (optional), e.g. office wear" style="flex:1;min-width:200px">
+    <input id="pal" placeholder="palette, e.g. navy blue, white" style="width:220px">
+    <button id="recRun">Recommend from ticked likes</button></div>
+  <h3 id="resTitle">Results</h3><div class="grid" id="resGrid"></div>
+</section>
+
+</main>
+
+<script>
+const PORT={age:5101,height:5102,fashion:5103};
+const api=(svc,path)=>`http://127.0.0.1:${PORT[svc]}${path}`;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let FASHION=[],UTK=[];
+
+// ---------- tabs
+document.querySelectorAll('section').forEach((s,i)=>{const b=document.createElement('button');b.textContent=s.dataset.tab;
+  b.onclick=()=>{document.querySelectorAll('section,nav button').forEach(x=>x.classList.remove('on'));s.classList.add('on');b.classList.add('on');try{localStorage.setItem('tab',i)}catch(e){}};
+  $('tabs').appendChild(b)});
+let t0=0;try{t0=+localStorage.getItem('tab')||0}catch(e){}
+$('tabs').children[t0].click();
+
+// ---------- service status
+async function refresh(){
+  try{const s=await (await fetch('/api/status')).json();
+    $('svcs').innerHTML=Object.entries(s).filter(([k])=>k[0]!=='_').map(([k,v])=>
+      `<div class="svc ${v.state}"><span class="dot"></span>${k} :${v.port}
+       ${v.state==='down'?`<button onclick="ctl('start','${k}')">start</button>`:`<button onclick="ctl('stop','${k}')">stop</button>`}</div>`).join('');
+    if(s._gpu){$('gpubar').style.width=(100*s._gpu.used_mb/s._gpu.total_mb)+'%';$('gputxt').textContent=`${(s._gpu.used_mb/1024).toFixed(1)} / ${(s._gpu.total_mb/1024).toFixed(1)} GB`}
+  }catch(e){}
+}
+async function ctl(a,k){await fetch(`/api/${a}/${k}`,{method:'POST'});setTimeout(refresh,800)}
+setInterval(refresh,4000);refresh();
+
+// ---------- helpers
+async function blobOf(src){if(src instanceof Blob)return src;return await (await fetch(src)).blob()}
+async function post(svc,path,fields){
+  const fd=new FormData();for(const[k,v]of Object.entries(fields)){if(v==null||v==='')continue;
+    if(v instanceof Blob)fd.append(k,v,'img.jpg');else fd.append(k,v)}
+  const r=await fetch(api(svc,path),{method:'POST',body:fd});
+  if(!r.ok){let d='';try{d=(await r.json()).detail}catch(e){};throw new Error(`${svc} ${r.status} ${d||''}`)}
+  return r.json()}
+function picker(boxId,list,onPick){$(boxId).innerHTML='';list.forEach(src=>{const i=document.createElement('img');i.src=src;i.title=src;i.onclick=()=>onPick(src);$(boxId).appendChild(i)})}
+function fileSel(inputId,prevId,setter){$(inputId).onchange=e=>{const f=e.target.files[0];if(!f)return;setter(f);$(prevId).src=URL.createObjectURL(f)}}
+const pct=x=>(100*x).toFixed(0)+'%';
+const probs=arr=>arr.map(p=>`<div class="prob"><span style="width:110px">${esc(p.label)}</span><div class="bar"><i style="width:${pct(p.p)}"></i></div><span class="note">${pct(p.p)}</span></div>`).join('');
+const pill=(ok,txt)=>`<span class="pill ${ok?'ok':'bad'}">${txt??(ok?'✓':'✗')}</span>`;
+const shuffle=a=>a.map(x=>[Math.random(),x]).sort((p,q)=>p[0]-q[0]).map(x=>x[1]);
+
+// ---------- data
+Promise.all([fetch('/data/fashion/labels.json').then(r=>r.json()).catch(()=>[]),fetch('/data/utkface/labels.json').then(r=>r.json()).catch(()=>[])]).then(([f,u])=>{
+  FASHION=f;UTK=u;
+  const ageS=['/data/height/child_plain.jpg',...shuffle(u).slice(0,7).map(x=>'/data/utkface/'+x.file)];
+  picker('ageSamples',ageS,s=>{ageImg=s;$('agePrev').src=s;$('ageMode').value=s.includes('utkface')?'face':'auto'});
+  picker('hSamples',['/data/height/child_marker.jpg','/data/height/child_marker_360x480_q50.jpg','/data/height/child_plain.jpg','/data/height/render_partial_body.jpg'],s=>{hImg=s;$('hPrev').src=s});
+  const fs=shuffle(f.filter(x=>['Tshirts','Shirts','Jeans','Dresses','Kurtas','Heels','Casual Shoes','Handbags','Jackets','Sweaters'].includes(x.articleType))).slice(0,10).map(x=>'/data/fashion/'+x.file);
+  picker('fSamples',['/samples/2_garment_cloth.jpg',...fs],s=>{fImg=s;$('fPrev').src=s});
+});
+
+// ---------- age
+let ageImg=null;fileSel('ageFile','agePrev',f=>ageImg=f);
+$('ageRun').onclick=async()=>{if(!ageImg)return;$('ageOut').innerHTML='…';
+  try{const r=await post('age','/estimate',{file:await blobOf(ageImg),mode:$('ageMode').value});
+    const truth=typeof ageImg==='string'?UTK.find(x=>ageImg.endsWith(x.file)):null;
+    $('ageOut').innerHTML=`<div class="stats">
+      <div class="stat"><b>${r.mivolo?r.mivolo.age:'–'}</b><span>MiVOLO age</span></div>
+      <div class="stat"><b>${r.mivolo?esc(r.mivolo.gender):'–'}</b><span>gender (${r.mivolo?pct(r.mivolo.gender_p):''})</span></div>
+      <div class="stat"><b>${r.vit_baseline.age}</b><span>ViT baseline (${esc(r.vit_baseline.bucket)})</span></div>
+      ${truth?`<div class="stat"><b>${truth.age}</b><span>true age</span></div>`:''}
+      <div class="stat"><b>${r.latency_ms}</b><span>ms</span></div></div>
+      <p class="note">face box ${JSON.stringify(r.face_box)} · body box ${JSON.stringify(r.body_box)} · shown range ${JSON.stringify(r.age_range)}</p>`}
+  catch(e){$('ageOut').innerHTML=`<p class="err">${esc(e.message)}</p>`}};
+
+// ---------- height
+let hImg=null;fileSel('hFile','hPrev',f=>hImg=f);
+$('hRun').onclick=async()=>{if(!hImg)return;$('hOut').innerHTML='… (first depth run loads a model, ~30 s)';
+  try{const r=await post('height','/estimate',{file:await blobOf(hImg),user_height_cm:$('hUser').value,marker_cm:$('hMarker').value,use_depth:$('hDepth').checked});
+    const m=Object.entries(r.methods).map(([k,v])=>`<tr><td>${k}${k===r.best_method?' <span class="pill ok">used</span>':''}</td><td><b>${v.height_cm}</b> cm</td><td class="note">${esc(JSON.stringify(Object.fromEntries(Object.entries(v).filter(([a])=>a!=='height_cm'))))}</td></tr>`).join('');
+    $('hOut').innerHTML=`<p>${r.full_body_visible?pill(1,'full body visible'):`<span class="pill warn">head or feet cut off</span>`} pixel height ${r.pixel_height} px · ${r.latency_ms} ms</p>
+      <table><tr><th>method</th><th>height</th><th>details</th></tr>${m||'<tr><td colspan=3>no scale source: add a marker or a known height</td></tr>'}</table>
+      ${r.measurements_cm?`<h3>Measurements (cm)</h3><table>${Object.entries({...r.measurements_cm,...Object.fromEntries(Object.entries(r.silhouette_width_cm||{}).map(([k,v])=>['silhouette '+k+' width',v]))}).map(([k,v])=>`<tr><td>${k.replace(/_/g,' ')}</td><td>${v}</td></tr>`).join('')}</table>`:''}`}
+  catch(e){$('hOut').innerHTML=`<p class="err">${esc(e.message)}</p>`}};
+$('markerLink').onclick=e=>{e.preventDefault();alert('Print an ArUco marker from https://chev.me/arucogen/ (dictionary 4x4, any ID, e.g. 150 mm), measure its printed side, and enter that size here.')};
+
+// ---------- fashion tags
+let fImg=null;fileSel('fFile','fPrev',f=>fImg=f);
+$('fRun').onclick=async()=>{if(!fImg)return;$('fOut').innerHTML='…';
+  try{const r=await post('fashion','/tag',{file:await blobOf(fImg)});
+    const truth=typeof fImg==='string'?FASHION.find(x=>fImg.endsWith(x.file)):null;
+    $('fOut').innerHTML=`${truth?`<p class="note">dataset label: <b>${esc(truth.articleType)}</b> · ${esc(truth.baseColour)} · ${esc(truth.usage)} — “${esc(truth.productDisplayName)}”</p>`:''}
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr))">
+      ${['type','colour','fabric','style'].map(k=>`<div><h3>${k}</h3>${probs(r[k])}</div>`).join('')}
+      <div><h3>cloth sim preset (${esc(r.fabric[0].label)})</h3><pre>${esc(JSON.stringify(r.fabric_sim,null,1))}</pre></div></div>
+      <p class="note">${r.latency_ms} ms</p>`}
+  catch(e){$('fOut').innerHTML=`<p class="err">${esc(e.message)}</p>`}};
+
+// ---------- catalog
+const liked=new Set();
+function showGrid(items,title){$('resTitle').textContent=title;$('resGrid').innerHTML=items.map(it=>{
+  const meta=FASHION.find(x=>x.file===it.id)||{};
+  return `<div class="tile ${liked.has(it.id)?'sel':''}" data-id="${esc(it.id)}"><img src="/data/fashion/${esc(it.id)}" alt="">
+   <div><b>${esc(meta.articleType||it.type)}</b> · ${esc(meta.baseColour||it.colour)}</div>
+   <div class="note">${esc((it.name||'').slice(0,48))}</div><div class="note">score ${it.score}</div>
+   <label class="note"><input type="checkbox" ${liked.has(it.id)?'checked':''} onclick="event.stopPropagation();toggleLike('${esc(it.id)}',this.checked)"> like</label></div>`}).join('');
+  document.querySelectorAll('#resGrid .tile').forEach(t=>t.onclick=()=>similar(t.dataset.id))}
+function toggleLike(id,on){on?liked.add(id):liked.delete(id)}
+async function similar(id){const r=await (await fetch(api('fashion',`/similar/${encodeURIComponent(id)}?k=12`))).json();showGrid(r,'Similar to '+(FASHION.find(x=>x.file===id)||{}).productDisplayName)}
+$('catLoad').onclick=async()=>{const n=+$('catN').value,items=FASHION.slice(0,n);$('catLoad').disabled=true;
+  try{for(let i=0;i<items.length;i++){const it=items[i];$('catMsg').textContent=`adding ${i+1}/${items.length}`;
+      await post('fashion','/catalog/add',{file:await blobOf('/data/fashion/'+it.file),item_id:it.file,name:it.productDisplayName||'',category:it.subCategory})}
+    $('catMsg').textContent=`${items.length} items in catalog`}catch(e){$('catMsg').textContent=e.message}
+  $('catLoad').disabled=false};
+$('qRun').onclick=async()=>{const r=await fetch(api('fashion','/search'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q:$('q').value,k:12})});showGrid(await r.json(),'Search: '+$('q').value)};
+$('q').onkeydown=e=>{if(e.key==='Enter')$('qRun').click()};
+$('recRun').onclick=async()=>{const r=await fetch(api('fashion','/recommend'),{method:'POST',headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({liked_ids:[...liked],occasion:$('occ').value,palette:$('pal').value.split(',').map(s=>s.trim()).filter(Boolean),k:12})});
+  showGrid(await r.json(),`Recommended (from ${liked.size} likes${$('occ').value?' + "'+$('occ').value+'"':''})`)};
+
+// ---------- autonomous test
+$('autoRun').onclick=async()=>{
+  const N=+$('autoN').value,out=$('autoOut');$('autoRun').disabled=true;out.innerHTML='';
+  const block=(title)=>{const d=document.createElement('div');d.innerHTML=`<h3>${title}</h3><div class="stats"></div><table></table>`;out.appendChild(d);return d};
+  // age
+  const A=block('Age — UTKFace faces with known age');A.querySelector('table').innerHTML='<tr><th></th><th>true</th><th>MiVOLO</th><th>err</th><th>ViT</th><th>err</th><th>gender</th></tr>';
+  const errs={m:[],v:[]};let gOk=0;const RUN={when:new Date().toISOString(),n:N,age:[],fashion:[],height:[]};
+  for(const it of shuffle(UTK).slice(0,N)){$('autoMsg').textContent='age '+(errs.m.length+1)+'/'+N;
+    try{const r=await post('age','/estimate',{file:await blobOf('/data/utkface/'+it.file),mode:'face'});
+      const em=Math.abs(r.mivolo.age-it.age),ev=Math.abs(r.vit_baseline.age-it.age);errs.m.push(em);errs.v.push(ev);
+      const gm=r.mivolo.gender.toLowerCase()===String(it.gender).toLowerCase();gOk+=gm;
+      RUN.age.push({file:it.file,true_age:it.age,mivolo:r.mivolo.age,vit:r.vit_baseline.age,true_gender:it.gender,gender:r.mivolo.gender});
+      A.querySelector('table').insertAdjacentHTML('beforeend',`<tr><td><img src="/data/utkface/${it.file}"></td><td>${it.age}</td><td>${r.mivolo.age}</td><td>${pill(em<=5,em.toFixed(1))}</td><td>${r.vit_baseline.age}</td><td>${pill(ev<=5,ev.toFixed(1))}</td><td>${pill(gm,esc(r.mivolo.gender))}</td></tr>`)}
+    catch(e){A.querySelector('table').insertAdjacentHTML('beforeend',`<tr><td colspan=7 class="err">${esc(e.message)}</td></tr>`);break}}
+  const mean=a=>a.length?(a.reduce((x,y)=>x+y,0)/a.length).toFixed(2):'–';
+  A.querySelector('.stats').innerHTML=`<div class="stat"><b>${mean(errs.m)}</b><span>MiVOLO MAE (years)</span></div><div class="stat"><b>${mean(errs.v)}</b><span>ViT MAE</span></div><div class="stat"><b>${errs.m.length?pct(gOk/errs.m.length):'–'}</b><span>gender correct</span></div>`;
+  // fashion
+  const TYPE={Tshirts:'t-shirt',Shirts:'shirt',Sweaters:'sweater',Sweatshirts:'hoodie',Jackets:'jacket',Blazers:'blazer',Dresses:'dress',Skirts:'skirt',Jeans:'jeans',Trousers:'trousers',Shorts:'shorts','Track Pants':'track pants',Kurtas:'kurta',Sarees:'saree','Casual Shoes':'sneakers','Sports Shoes':'sneakers','Formal Shoes':'formal shoes',Sandals:'sandals','Flip Flops':'sandals',Heels:'heels',Handbags:'handbag',Watches:'watch',Sunglasses:'sunglasses',Caps:'cap'};
+  const F=block('Fashion — products with known type / colour');F.querySelector('table').innerHTML='<tr><th></th><th>true type</th><th>predicted</th><th>true colour</th><th>predicted</th><th>fabric guess</th></tr>';
+  let tOk=0,cOk=0,n=0;
+  for(const it of shuffle(FASHION.filter(x=>TYPE[x.articleType])).slice(0,N)){n++;$('autoMsg').textContent='fashion '+n+'/'+N;
+    try{const r=await post('fashion','/tag',{file:await blobOf('/data/fashion/'+it.file)});
+      const to=r.type[0].label===TYPE[it.articleType],co=r.colour[0].label===String(it.baseColour).toLowerCase().replace('multi','multicolour');tOk+=to;cOk+=co;
+      RUN.fashion.push({file:it.file,true_type:TYPE[it.articleType],type:r.type[0].label,true_colour:it.baseColour,colour:r.colour[0].label,fabric:r.fabric[0].label});
+      F.querySelector('table').insertAdjacentHTML('beforeend',`<tr><td><img src="/data/fashion/${it.file}"></td><td>${TYPE[it.articleType]}</td><td>${pill(to,esc(r.type[0].label))}</td><td>${esc(it.baseColour)}</td><td>${pill(co,esc(r.colour[0].label))}</td><td>${esc(r.fabric[0].label)}</td></tr>`)}
+    catch(e){F.querySelector('table').insertAdjacentHTML('beforeend',`<tr><td colspan=6 class="err">${esc(e.message)}</td></tr>`);break}}
+  F.querySelector('.stats').innerHTML=`<div class="stat"><b>${n?pct(tOk/n):'–'}</b><span>type top-1</span></div><div class="stat"><b>${n?pct(cOk/n):'–'}</b><span>colour top-1</span></div>`;
+  // height
+  const H=block('Height — marker test images (assumed truth 110 cm)');H.querySelector('table').innerHTML='<tr><th></th><th>case</th><th>marker</th><th>depth</th><th>full body</th></tr>';
+  for(const c of ['child_marker.jpg','child_marker_360x480_q50.jpg','child_plain.jpg']){$('autoMsg').textContent='height '+c;
+    try{const r=await post('height','/estimate',{file:await blobOf('/data/height/'+c),marker_cm:15,use_depth:true});
+      const a=r.methods.aruco,d=r.methods.metric_depth;RUN.height.push({case:c,aruco:a&&a.height_cm,depth:d&&d.height_cm,full_body:r.full_body_visible});
+      H.querySelector('table').insertAdjacentHTML('beforeend',`<tr><td><img src="/data/height/${c}"></td><td>${c}</td><td>${a?pill(Math.abs(a.height_cm-110)<=5,a.height_cm+' cm'):'no marker'}</td><td>${d?pill(Math.abs(d.height_cm-110)<=5,d.height_cm+' cm'):'–'}</td><td>${r.full_body_visible?'yes':'cut off'}</td></tr>`)}
+    catch(e){H.querySelector('table').insertAdjacentHTML('beforeend',`<tr><td colspan=5 class="err">${esc(e.message)}</td></tr>`)}}
+  RUN.summary={age_mae_mivolo:+mean(errs.m),age_mae_vit:+mean(errs.v),gender_acc:errs.m.length?gOk/errs.m.length:null,type_acc:n?tOk/n:null,colour_acc:n?cOk/n:null};
+  try{const s=await (await fetch('/api/results',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(RUN)})).json();$('autoMsg').textContent='done · saved '+s.saved}
+  catch(e){$('autoMsg').textContent='done (not saved)'}
+  $('autoRun').disabled=false};
+</script>
+</body>
+</html>
